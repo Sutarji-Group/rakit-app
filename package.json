@@ -15,7 +15,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "rm -f prisma/dev.db && prisma db push --skip-generate && npm run db:seed",
     "postinstall": "prisma generate",
-    "calibration": "tsx scripts/calibration-report.ts"
+    "calibration": "tsx scripts/calibration-report.ts",
+    "audit:katalog": "tsx scripts/audit-catalog.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
