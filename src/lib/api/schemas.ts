@@ -12,16 +12,41 @@ import {
   USER_TIERS,
 } from '@/lib/domain/enums';
 
-/** Nomor WhatsApp Indonesia dalam berbagai bentuk penulisan yang lazim. */
+/**
+ * Nomor WhatsApp Indonesia.
+ *
+ * Divalidasi dengan menormalkan lebih dulu, bukan mencocokkan pola penulisan.
+ * Orang Indonesia menulis nomornya dalam banyak bentuk — 0812-3456-7890,
+ * +62 812 3456 7890, 62812.34567890 — dan menolak salah satunya hanya karena
+ * pemisahnya berbeda adalah cara termahal kehilangan lead di formulir terakhir.
+ */
 const whatsappSchema = z
   .string()
   .trim()
   .min(8, 'Nomor WhatsApp terlalu pendek.')
-  .max(20, 'Nomor WhatsApp terlalu panjang.')
-  .regex(
-    /^(\+?62|0)[\s-]?8[1-9][\s-]?\d{3,4}[\s-]?\d{3,5}$/,
-    'Masukkan nomor WhatsApp Indonesia yang sah, contoh 0812-3456-7890.',
-  );
+  .max(24, 'Nomor WhatsApp terlalu panjang.')
+  .transform((value) => normalizeIndonesianPhone(value))
+  .refine((value) => value !== null, {
+    message: 'Masukkan nomor WhatsApp Indonesia yang sah, contoh 0812-3456-7890.',
+  })
+  .transform((value) => value!);
+
+/**
+ * Menormalkan nomor telepon Indonesia ke bentuk 08xxxxxxxxxx.
+ * Mengembalikan null bila nomornya tidak masuk akal.
+ */
+export function normalizeIndonesianPhone(input: string): string | null {
+  const digits = input.replace(/[^\d+]/g, '');
+  let local = digits;
+
+  if (local.startsWith('+62')) local = `0${local.slice(3)}`;
+  else if (local.startsWith('62')) local = `0${local.slice(2)}`;
+  else if (local.startsWith('8')) local = `0${local}`;
+
+  // Nomor seluler Indonesia: 08 diikuti 8–12 digit (total 10–14 digit).
+  if (!/^08\d{8,12}$/.test(local)) return null;
+  return local;
+}
 
 const emailSchema = z
   .string()

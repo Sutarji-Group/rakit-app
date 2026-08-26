@@ -12,3 +12,5 @@ export { ShareDialog } from './share-dialog';
 export { PresetCompare } from './preset-compare';
 export { RecommendationList } from './recommendation-list';
 export { ProjectOptionsForm } from './project-options-form';
+export { LeadForm } from './lead-form';
+export { SummaryAnalytics } from './summary-analytics';

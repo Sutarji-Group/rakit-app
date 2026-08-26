@@ -54,26 +54,34 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
-  const Comp = asChild ? Slot : 'button';
+  const classes = cn(
+    'inline-flex select-none items-center justify-center gap-[inherit] whitespace-nowrap font-medium',
+    'transition-[background-color,border-color,color,opacity,transform] duration-150',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
+    'disabled:pointer-events-none disabled:opacity-55',
+    'active:translate-y-px',
+    VARIANT[variant],
+    SIZE[size],
+    className,
+  );
+
+  // Pada mode asChild, Slot hanya boleh menerima SATU elemen anak. Ikon
+  // leading/trailing karena itu tidak disisipkan di sini — elemen anak (mis.
+  // <Link>) yang menyusun isinya sendiri.
+  if (asChild) {
+    return (
+      <Slot className={classes} {...props}>
+        {children}
+      </Slot>
+    );
+  }
+
   return (
-    <Comp
-      className={cn(
-        'inline-flex select-none items-center justify-center whitespace-nowrap font-medium',
-        'transition-[background-color,border-color,color,opacity,transform] duration-150',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
-        'disabled:pointer-events-none disabled:opacity-55',
-        'active:translate-y-px',
-        VARIANT[variant],
-        SIZE[size],
-        className,
-      )}
-      disabled={disabled || isLoading}
-      {...props}
-    >
+    <button className={classes} disabled={disabled || isLoading} {...props}>
       {isLoading ? <Spinner /> : leadingIcon}
       {children}
       {!isLoading && trailingIcon}
-    </Comp>
+    </button>
   );
 }
 
