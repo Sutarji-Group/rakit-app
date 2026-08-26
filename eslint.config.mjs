@@ -18,6 +18,8 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Klien Prisma hasil generate — bukan kode yang kita tulis.
+      "src/generated/**",
     ],
   },
 ];
