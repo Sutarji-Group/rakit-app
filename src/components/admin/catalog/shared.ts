@@ -460,3 +460,32 @@ export interface CsvPreview {
 export function emptyCsvCounts(): Record<CsvRowStatus, number> {
   return { NEW: 0, CHANGED: 0, UNCHANGED: 0, INVALID: 0 };
 }
+
+/**
+ * Nilai awal form fitur baru.
+ *
+ * Tinggal di berkas netral ini, bukan di feature-form.tsx yang ber-'use client':
+ * halaman "tambah fitur" adalah Server Component dan memanggil fungsi ini untuk
+ * menyusun nilai awalnya. Memanggil fungsi dari modul klien di server adalah
+ * kesalahan yang hanya muncul saat runtime produksi, bukan saat kompilasi.
+ */
+export function emptyFeatureValues(groupId: string, sortOrder: number): FeatureFormValues {
+  return {
+    groupId,
+    slug: '',
+    name: '',
+    clientDescription: '',
+    internalDescription: '',
+    type: 'STANDARD',
+    manDayMin: '3',
+    manDayMax: '4',
+    effortRatioOverride: '',
+    isEssential: false,
+    keywords: '',
+    status: 'DRAFT',
+    sortOrder: String(sortOrder),
+    seoTitle: '',
+    seoDescription: '',
+    media: [],
+  };
+}

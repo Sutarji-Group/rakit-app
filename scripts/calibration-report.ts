@@ -1,5 +1,22 @@
-import { BASELINE_PRICING_RULE as R, computePrice, deriveCogsPerManDay } from '@/lib/pricing';
-const mk = (t:any,n:number,md:number,p:string)=>Array.from({length:n},(_,i)=>({id:`${p}${i}`,name:`${p}${i}`,type:t,manDayMin:md,manDayMax:md}));
+import {
+  BASELINE_PRICING_RULE as R,
+  computePrice,
+  deriveCogsPerManDay,
+  type PriceInputFeature,
+} from '@/lib/pricing';
+const mk = (
+  type: PriceInputFeature['type'],
+  count: number,
+  manDay: number,
+  prefix: string,
+): PriceInputFeature[] =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `${prefix}${i}`,
+    name: `${prefix}${i}`,
+    type,
+    manDayMin: manDay,
+    manDayMax: manDay,
+  }));
 const rp=(v:number)=>'Rp '+v.toLocaleString('id-ID');
 const c=deriveCogsPerManDay(R);
 console.log('COGS/man-day:',rp(c.cogsPerManDay),'| hari billable:',c.billableDaysPerMonth,'| beban bulanan:',rp(c.monthlyLoadedCost));

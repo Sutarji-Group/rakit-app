@@ -41,26 +41,6 @@ import {
 } from './shared';
 import { fieldError, useCatalogAction } from './use-action';
 
-export function emptyFeatureValues(groupId: string, sortOrder: number): FeatureFormValues {
-  return {
-    groupId,
-    slug: '',
-    name: '',
-    clientDescription: '',
-    internalDescription: '',
-    type: 'STANDARD',
-    manDayMin: '3',
-    manDayMax: '4',
-    effortRatioOverride: '',
-    isEssential: false,
-    keywords: '',
-    status: 'DRAFT',
-    sortOrder: String(sortOrder),
-    seoTitle: '',
-    seoDescription: '',
-    media: [],
-  };
-}
 
 /**
  * Form satu fitur katalog (L2).

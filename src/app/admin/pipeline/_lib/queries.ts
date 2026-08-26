@@ -145,8 +145,6 @@ export async function listAssignableUsers(): Promise<OwnerOption[]> {
 // Detail lead (O2–O6)
 // ---------------------------------------------------------------------------
 
-export type LeadDetailView = NonNullable<Awaited<ReturnType<typeof getLeadDetailView>>>;
-
 export async function getLeadDetailView(leadId: string) {
   const lead = await getLeadDetail(leadId);
   if (!lead) return null;

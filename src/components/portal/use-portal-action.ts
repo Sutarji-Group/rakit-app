@@ -21,7 +21,21 @@ export function usePortalAction() {
   const run = useCallback(
     (task: () => Promise<PortalActionResult>, onSuccess?: () => void) => {
       startTransition(async () => {
-        const outcome = await task();
+        let outcome: PortalActionResult | undefined;
+        try {
+          outcome = await task();
+        } catch {
+          toast({
+            title: 'Tindakan gagal diproses. Periksa koneksi Anda lalu coba lagi.',
+            tone: 'danger',
+          });
+          return;
+        }
+
+        // Aksi yang berakhir dengan pengalihan halaman (mis. membuka
+        // konfigurator addendum) tidak mengembalikan nilai apa pun.
+        if (!outcome) return;
+
         setResult(outcome);
         toast({
           title: outcome.message,

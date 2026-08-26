@@ -84,7 +84,6 @@ export default async function CustomQueuePage({
       totalMax: request.configuration.totalMax,
       contactName:
         request.configuration.lead?.contactName ?? request.configuration.lead?.company ?? null,
-      company: request.configuration.lead?.company ?? null,
       quoteNumber: request.configuration.lead?.quoteNumber ?? null,
     };
   });

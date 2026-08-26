@@ -9,6 +9,7 @@
 import type { BadgeVariant } from '@/components/ui';
 import type {
   ActivityKind,
+  AddOnKind,
   CustomRequestStatus,
   FeatureType,
   ItemOrigin,
@@ -127,7 +128,7 @@ export interface FeatureGroupBlock {
 export interface AddOnItem {
   id: string;
   name: string;
-  kind: string;
+  kind: AddOnKind;
   priceMin: number;
   priceMax: number;
   isRecurring: boolean;

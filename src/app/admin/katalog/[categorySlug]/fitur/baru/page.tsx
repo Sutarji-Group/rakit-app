@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import { PageBody, PageHeader } from '@/components/admin';
-import {
-  FeatureForm,
-  emptyFeatureValues,
-} from '@/components/admin/catalog/feature-form';
+import { FeatureForm } from '@/components/admin/catalog/feature-form';
+import { emptyFeatureValues } from '@/components/admin/catalog/shared';
 import { Button, EmptyState } from '@/components/ui';
 import { requireArea } from '@/lib/auth/guards';
 import { getActivePricingRule } from '@/lib/services/pricing-rule';

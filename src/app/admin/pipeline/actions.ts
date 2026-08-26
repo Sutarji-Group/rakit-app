@@ -38,6 +38,13 @@ function refresh(leadId?: string): void {
   if (leadId) revalidatePath(`${BOARD_PATH}/${leadId}`);
 }
 
+/**
+ * Pesan cadangan berbahasa Indonesia untuk masalah validasi yang tidak diberi
+ * pesan sendiri. Pesan bawaan Zod berbahasa Inggris, sedangkan seluruh teks
+ * yang terlihat pengguna wajib berbahasa Indonesia.
+ */
+const idError = () => 'Data yang dikirim tidak lengkap atau tidak dikenali.';
+
 function invalid(error: z.ZodError): PipelineActionResult {
   return { ok: false, message: error.issues[0]?.message ?? 'Data tidak valid.' };
 }
@@ -57,7 +64,7 @@ export async function moveStage(
   input: z.input<typeof moveStageSchema>,
 ): Promise<PipelineActionResult> {
   const user = await requireArea('leads', BOARD_PATH);
-  const parsed = moveStageSchema.safeParse(input);
+  const parsed = moveStageSchema.safeParse(input, { error: idError });
   if (!parsed.success) return invalid(parsed.error);
 
   const { leadId, stage, lostReason, lostNote } = parsed.data;
@@ -91,7 +98,7 @@ export async function assignOwner(
   input: z.input<typeof assignSchema>,
 ): Promise<PipelineActionResult> {
   const user = await requireArea('leads', BOARD_PATH);
-  const parsed = assignSchema.safeParse(input);
+  const parsed = assignSchema.safeParse(input, { error: idError });
   if (!parsed.success) return invalid(parsed.error);
 
   const owner = await prisma.user.findUnique({
@@ -123,7 +130,7 @@ export async function logActivity(
   input: z.input<typeof activitySchema>,
 ): Promise<PipelineActionResult> {
   const user = await requireArea('leads', BOARD_PATH);
-  const parsed = activitySchema.safeParse(input);
+  const parsed = activitySchema.safeParse(input, { error: idError });
   if (!parsed.success) return invalid(parsed.error);
 
   const { leadId, kind, body, dueAt } = parsed.data;
@@ -164,7 +171,7 @@ export async function completeReminder(
   input: z.input<typeof completeSchema>,
 ): Promise<PipelineActionResult> {
   await requireArea('leads', BOARD_PATH);
-  const parsed = completeSchema.safeParse(input);
+  const parsed = completeSchema.safeParse(input, { error: idError });
   if (!parsed.success) return invalid(parsed.error);
 
   const updated = await prisma.leadActivity.updateMany({
@@ -201,7 +208,7 @@ export async function overridePrice(
   input: z.input<typeof overrideSchema>,
 ): Promise<PipelineActionResult> {
   const user = await requireArea('leads', BOARD_PATH);
-  const parsed = overrideSchema.safeParse(input);
+  const parsed = overrideSchema.safeParse(input, { error: idError });
   if (!parsed.success) return invalid(parsed.error);
 
   const result = await applyPriceOverride({
@@ -237,7 +244,7 @@ export async function approveOverride(
   input: z.input<typeof approveSchema>,
 ): Promise<PipelineActionResult> {
   const user = await requireArea('leads', BOARD_PATH);
-  const parsed = approveSchema.safeParse(input);
+  const parsed = approveSchema.safeParse(input, { error: idError });
   if (!parsed.success) return invalid(parsed.error);
 
   if (!can(user.role, 'approveOverride')) {
@@ -295,7 +302,7 @@ export async function lockLeadPrice(
   input: z.input<typeof lockSchema>,
 ): Promise<PipelineActionResult> {
   const user = await requireArea('leads', BOARD_PATH);
-  const parsed = lockSchema.safeParse(input);
+  const parsed = lockSchema.safeParse(input, { error: idError });
   if (!parsed.success) return invalid(parsed.error);
 
   // BR-11: penguncian menuntut persetujuan consultant, bukan sekadar niat baik

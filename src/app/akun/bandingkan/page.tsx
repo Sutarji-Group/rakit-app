@@ -117,7 +117,18 @@ export default async function BandingkanPage({
           yang tidak terlihat di daftar fitur. */}
       <Card className="p-4 sm:p-5">
         <h2 className="text-base font-semibold text-fg">Konfigurasi proyek</h2>
-        <dl className="mt-3 flex flex-col divide-y divide-border">
+        {/* Kepala kolom hanya di layar lebar; di ponsel tiap nilai sudah diberi
+            penanda "A:" dan "B:" pada barisnya masing-masing. */}
+        <div className="mt-3 hidden gap-4 border-b border-border pb-2 sm:flex">
+          <span className="w-56 shrink-0" aria-hidden="true" />
+          <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+            Rakitan A
+          </span>
+          <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+            Rakitan B
+          </span>
+        </div>
+        <dl className="flex flex-col divide-y divide-border">
           <OptionRow
             label="Cara diakses"
             a={PROJECT_PLATFORM_LABEL[a.platform]}
