@@ -1,9 +1,14 @@
 /**
  * Union type domain untuk kolom bertipe String di Prisma.
  *
- * SQLite tidak mendukung enum native, sehingga seluruh "enum" disimpan sebagai
- * String. Modul ini menjadi satu-satunya sumber kebenaran nilai yang sah plus
- * label bahasa Indonesia untuk ditampilkan di UI.
+ * Seluruh "enum" disimpan sebagai String, bukan enum native Postgres. Enum
+ * native memindahkan daftar nilai ke basis data, sehingga menambah satu nilai
+ * menuntut migrasi ALTER TYPE — padahal daftar nilai di sini berubah mengikuti
+ * PRD, bukan mengikuti data.
+ *
+ * Modul ini menjadi satu-satunya sumber kebenaran nilai yang sah plus label
+ * bahasa Indonesia untuk ditampilkan di UI, dan coerceEnum menjaga nilai asing
+ * dari basis data tidak pernah lolos ke lapisan tampilan.
  */
 
 // ---------------------------------------------------------------------------

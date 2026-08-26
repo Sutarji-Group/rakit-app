@@ -2,21 +2,29 @@
 // RAKIT — Platform Jasa Pembuatan Aplikasi Berbasis Konfigurator Fitur
 // Skema data mengacu pada PRD v1.1 bagian 10 (Model Data Konseptual).
 //
-// Catatan provider:
-//   Default SQLite agar aplikasi monolith ini bisa dijalankan tanpa layanan
-//   eksternal. Untuk produksi, ganti provider ke "postgresql" — seluruh model
-//   di bawah kompatibel. Kolom bertipe JSON disimpan sebagai String karena
-//   SQLite tidak mendukung tipe Json; akses selalu lewat helper di
-//   src/lib/db/json.ts sehingga migrasi ke Postgres cukup mengubah tipe kolom.
+// Provider: PostgreSQL, sama persis antara lokal dan produksi. Kesamaan ini
+// disengaja — perbedaan dialek (collation ORDER BY, case-sensitivity LIKE,
+// perilaku transaksi) hanya muncul saat produksi kalau dibiarkan berbeda.
 //
-// Enum juga direpresentasikan sebagai String (SQLite tidak mendukung enum).
-// Union type TypeScript untuk tiap kolom tersebut ada di src/lib/domain/enums.ts
-// dan divalidasi lewat Zod di lapisan service.
+// Kolom bertipe JSON tetap disimpan sebagai String, bukan Json. Tidak ada satu
+// pun kueri yang menyaring atau mengurutkan berdasarkan isi JSON — semuanya
+// dibaca utuh lewat helper di src/lib/db/json.ts — jadi tipe Json hanya akan
+// menambah jalur konversi tanpa menambah kemampuan.
+//
+// Enum direpresentasikan sebagai String. Union type TypeScript untuk tiap kolom
+// tersebut ada di src/lib/domain/enums.ts dan divalidasi lewat Zod di lapisan
+// service, sehingga batasan nilai ditegakkan di satu tempat, bukan dua.
+//
+// url vs directUrl: di serverless (Vercel) setiap invocation membuka koneksi
+// sendiri, jadi DATABASE_URL menunjuk ke connection pooler. Migrasi tidak bisa
+// lewat pooler transaction-mode, karena itu DIRECT_URL menunjuk ke koneksi
+// langsung. Saat pengembangan lokal keduanya boleh berisi nilai yang sama.
 // ============================================================================
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -1133,4 +1141,29 @@ model CalibrationSnapshot {
 
   @@index([featureId])
   @@index([periodLabel])
+}
+
+// ---------------------------------------------------------------------------
+// PENOMORAN DOKUMEN
+// ---------------------------------------------------------------------------
+
+/// Pencacah nomor dokumen berurutan per tahun (RKT, PRJ, INV, KTR).
+///
+/// Nomor tidak boleh dihitung dengan membaca baris terakhir lalu menambah satu:
+/// dua permintaan bersamaan membaca baris terakhir yang sama dan memilih nomor
+/// yang sama. Postgres menjalankan penulisan secara paralel, jadi celah itu
+/// nyata — bukan teori.
+///
+/// Baris di sini yang menjadi wasitnya. Penambahannya satu pernyataan atomik,
+/// sehingga pemanggil bersamaan mengantre di kunci baris dan masing-masing
+/// menerima blok nomor sendiri. Lihat src/lib/db/document-number.ts.
+model DocumentSequence {
+  /// Awalan dokumen: RKT (penawaran), PRJ (proyek), INV (invoice), KTR (kontrak).
+  prefix    String
+  year      Int
+  /// Nomor terakhir yang sudah diberikan. Blok berikutnya dimulai dari +1.
+  lastValue Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([prefix, year])
 }

@@ -16,15 +16,23 @@ siapa pun.
 
 ## Menjalankan
 
+Dibutuhkan Node.js 20+ dan **PostgreSQL 14+** yang sudah berjalan.
+
 ```bash
+createdb rakit                        # atau buat lewat klien Postgres pilihan Anda
+
 npm install
-cp .env.example .env      # sesuaikan AUTH_SECRET untuk produksi
-npm run db:push           # buat skema di SQLite
-npm run db:seed           # isi katalog, pengguna, dan data contoh
+cp .env.example .env                  # isi DATABASE_URL, DIRECT_URL, dan AUTH_SECRET
+npm run db:deploy                     # terapkan migrasi
+npm run db:seed                       # isi katalog, pengguna, dan data contoh
 npm run dev
 ```
 
 Buka <http://localhost:3000>.
+
+Di `.env`, `DATABASE_URL` dan `DIRECT_URL` boleh berisi nilai yang sama saat
+pengembangan lokal — perbedaannya baru relevan di produksi serverless (lihat
+[Menggelar ke produksi](#menggelar-ke-produksi)).
 
 ### Akun contoh
 
@@ -47,7 +55,9 @@ npm run build        # build produksi
 npm run typecheck    # tsc --noEmit
 npm run lint         # eslint
 npm test             # pengujian mesin harga, dependensi, dan validasi
-npm run db:reset     # hapus dev.db lalu push + seed ulang
+npm run db:migrate   # buat migrasi baru setelah mengubah schema.prisma
+npm run db:deploy    # terapkan migrasi yang sudah ada
+npm run db:reset     # kosongkan basis data lalu migrasi + seed ulang
 npm run calibration  # laporan kalibrasi harga terhadap PRD Lampiran C
 ```
 
@@ -55,10 +65,17 @@ npm run calibration  # laporan kalibrasi harga terhadap PRD Lampiran C
 
 ## Arsitektur
 
-Monolith **Next.js 15 (App Router) + TypeScript + Prisma**. Tidak ada layanan
-eksternal yang wajib: SQLite dipakai secara bawaan agar aplikasi bisa dijalankan
-di mana pun. Untuk produksi, ubah `provider` di `prisma/schema.prisma` menjadi
-`postgresql` — seluruh model sudah kompatibel.
+Monolith **Next.js 15 (App Router) + TypeScript + Prisma + PostgreSQL**.
+
+Provider basis datanya sama antara lokal dan produksi, dan itu disengaja.
+Perbedaan dialek — urutan `ORDER BY`, case-sensitivity `LIKE`, perilaku
+transaksi saat penulisan berjalan paralel — tidak muncul saat pengembangan
+kalau providernya berbeda; ia muncul di produksi, pada pengguna sungguhan.
+
+Kolom JSON disimpan sebagai `String` dan "enum" disimpan sebagai `String`,
+bukan tipe native Postgres. Tidak ada kueri yang menyaring berdasarkan isi JSON,
+dan daftar nilai enum berubah mengikuti PRD, bukan mengikuti data — memindahkan
+keduanya ke basis data hanya menambah migrasi tanpa menambah kemampuan.
 
 ### Dua mesin yang menjadi kontrak seluruh sistem
 
@@ -178,3 +195,66 @@ terhadap C.3 dan Lampiran B, serta normalisasi masukan formulir. Seed juga
 memvalidasi katalog lebih dulu terhadap batas lebar rentang, dependensi
 melingkar, rujukan slug, dan konsistensi preset — katalog cacat menggagalkan
 seed alih-alih diam-diam masuk basis data.
+
+---
+
+## Menggelar ke produksi
+
+Aplikasi ini berjalan di platform serverless mana pun yang mendukung Next.js;
+petunjuk di bawah memakai Vercel sebagai contoh.
+
+### 1. Siapkan basis data
+
+Butuh PostgreSQL terkelola yang bisa diakses dari internet — Neon, Supabase,
+Railway, atau Postgres milik sendiri. **SQLite tidak bisa dipakai**: berkas
+sistem di serverless bersifat hanya-baca dan tidak dibagi antar instance, jadi
+setiap invocation akan melihat basis data yang berbeda atau tidak ada sama
+sekali.
+
+### 2. Isi variabel lingkungan
+
+| Variabel | Isi |
+|---|---|
+| `DATABASE_URL` | Koneksi **lewat pooler**, ditambah `?pgbouncer=true&connection_limit=1` |
+| `DIRECT_URL` | Koneksi **langsung** ke host basis data, tanpa pooler |
+| `AUTH_SECRET` | String acak minimal 32 karakter — `openssl rand -base64 32` |
+| `NEXT_PUBLIC_APP_URL` | URL publik aplikasi, mis. `https://rakit.id` |
+| `NEXT_PUBLIC_COMPANY_*` | Identitas perusahaan pada dokumen penawaran |
+
+Dua URL basis data dibutuhkan karena keduanya menjawab masalah yang berlawanan.
+Setiap invocation serverless membuka koneksinya sendiri, dan Postgres punya
+batas koneksi yang jauh lebih kecil daripada jumlah invocation yang mungkin
+hidup bersamaan — karena itu aplikasi menyambung lewat pooler. Namun
+`prisma migrate` tidak bisa berjalan lewat pooler transaction-mode, sehingga
+migrasi memakai `DIRECT_URL`.
+
+Contoh untuk Neon:
+
+```
+DATABASE_URL="postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/rakit?sslmode=require&pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://user:pass@ep-xxx.region.aws.neon.tech/rakit?sslmode=require"
+```
+
+Perhatikan bedanya: host pooler mengandung `-pooler`, host langsung tidak.
+
+### 3. Gelar
+
+`npm run build` menjalankan `prisma generate`, lalu `prisma migrate deploy`,
+baru `next build`. Migrasi karenanya ikut tergelar setiap kali deploy, dan build
+gagal lebih dulu bila basis datanya tidak terjangkau — lebih baik gagal saat
+build daripada terdeploy dalam keadaan tidak berfungsi.
+
+### 4. Isi katalog satu kali
+
+Basis data yang baru bermigrasi masih kosong: katalog, aturan harga, dan akun
+belum ada. Jalankan seed sekali dari mesin Anda, mengarah ke basis data produksi:
+
+```bash
+DATABASE_URL="<DIRECT_URL produksi>" DIRECT_URL="<DIRECT_URL produksi>" npm run db:seed
+```
+
+Seed juga membuat akun contoh dengan kata sandi `rakit2026`. **Ganti atau hapus
+akun-akun itu sebelum aplikasi dipakai sungguhan.**
+
+Sebelum seed dijalankan, situs tetap menyala tanpa error — halaman katalog
+merender kosong dan dirender ulang saat pertama diminta setelah datanya ada.

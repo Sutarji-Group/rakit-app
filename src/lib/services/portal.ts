@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/lib/db/prisma';
-import { buildDocumentNumber } from '@/lib/format';
+import { allocateDocumentNumbers } from '@/lib/db/document-number';
 import {
   CHANGE_REQUEST_STATUSES,
   COUNTED_CUSTOM_STATUSES,
@@ -611,7 +611,7 @@ export async function createChangeRequest(
     data: { reason: 'Sudah terpasang di proyek ini' },
   });
 
-  const number = await nextSequentialNumber('CR', 'changeRequest');
+  const number = (await allocateDocumentNumbers('CR', 1))[0];
 
   await prisma.changeRequest.create({
     data: {
@@ -873,7 +873,7 @@ export async function approveChangeRequest(
   const agreedPrice = impact.priceMax;
   const taxAmount = Math.round((agreedPrice * TAX_PCT) / 100);
   const now = new Date();
-  const invoiceNumber = await nextSequentialNumber('INV', 'invoice');
+  const invoiceNumber = (await allocateDocumentNumbers('INV', 1))[0];
 
   const lastMilestone = await prisma.milestone.findFirst({
     where: { projectId: row.project.id },
@@ -969,36 +969,4 @@ export async function cancelChangeRequest(
   });
 
   return done(`Addendum ${row.number} dibatalkan.`);
-}
-
-/**
- * Nomor dokumen berurutan per tahun (RKT/INV/CR-2026-0001).
- *
- * Nomor wajib unik, jadi urutan berikutnya dicari maju sampai menemukan slot
- * kosong — pembatalan di tengah tidak boleh membuat penomoran macet.
- */
-async function nextSequentialNumber(
-  prefix: string,
-  model: 'invoice' | 'changeRequest',
-): Promise<string> {
-  const year = new Date().getFullYear();
-  const startsWith = `${prefix}-${year}-`;
-
-  const used =
-    model === 'invoice'
-      ? await prisma.invoice.findMany({
-          where: { number: { startsWith } },
-          select: { number: true },
-        })
-      : await prisma.changeRequest.findMany({
-          where: { number: { startsWith } },
-          select: { number: true },
-        });
-
-  const taken = new Set(used.map((row) => row.number));
-  for (let sequence = 1; sequence <= taken.size + 1; sequence += 1) {
-    const candidate = buildDocumentNumber(prefix, year, sequence);
-    if (!taken.has(candidate)) return candidate;
-  }
-  return buildDocumentNumber(prefix, year, taken.size + 1);
 }

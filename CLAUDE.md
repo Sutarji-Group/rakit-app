@@ -23,9 +23,10 @@ npm run build        # build produksi (menjalankan prisma generate lebih dulu)
 npm run typecheck    # tsc --noEmit — wajib bersih
 npm run lint         # eslint — wajib bersih tanpa warning
 npm test             # pengujian mesin harga & dependensi
-npm run db:push      # sinkronkan skema ke SQLite
+npm run db:migrate   # buat migrasi baru setelah mengubah schema.prisma
+npm run db:deploy    # terapkan migrasi yang sudah ada
 npm run db:seed      # isi katalog, pengguna, dan data contoh
-npm run db:reset     # hapus dev.db lalu push + seed ulang
+npm run db:reset     # kosongkan basis data lalu migrasi + seed ulang
 ```
 
 Akun contoh setelah seed (kata sandi semua `rakit2026`):
@@ -41,7 +42,8 @@ prisma/seed-demo.ts           Data contoh untuk seluruh papan admin
 
 src/lib/domain/enums.ts       Union type + label bahasa Indonesia untuk semua "enum"
 src/lib/db/prisma.ts          Singleton Prisma Client
-src/lib/db/json.ts            Helper kolom JSON (SQLite menyimpannya sebagai String)
+src/lib/db/json.ts            Helper kolom JSON (disimpan sebagai String)
+src/lib/db/document-number.ts Pemberi nomor RKT/PRJ/INV/KTR/CR — atomik
 
 src/lib/pricing/              MESIN HARGA — fungsi murni, PRD bagian 6
   engine.ts                     computePrice(), validateRangeWidth(), evaluatePriceOverride()
@@ -99,6 +101,25 @@ ke klien**, hanya di area admin (PRD 6.4).
 Prinsip Produk #2: keranjang yang mustahil dibangun tidak boleh bisa dibuat.
 `enforceSelection()` dipanggil server pada **setiap** penyimpanan, jadi apa pun
 yang dikirim browser akan dinormalkan ulang.
+
+## Basis data
+
+PostgreSQL, providernya sama antara lokal dan produksi. Jangan mengubahnya —
+perbedaan dialek tidak akan terlihat saat pengembangan, hanya di produksi.
+
+- Perubahan skema selalu lewat migrasi (`npm run db:migrate`), tidak pernah
+  lewat `db push`. Berkas migrasi ikut ter-commit; produksi menerapkannya
+  otomatis saat build.
+- Kolom JSON bertipe `String`, dibaca lewat `parseJson`/`stringifyJson`.
+  "Enum" juga `String`, divalidasi lewat `coerceEnum` dari `@/lib/domain/enums`.
+- **Nomor dokumen tidak boleh dihitung dengan membaca baris terakhir lalu
+  menambah satu.** Postgres menjalankan penulisan secara paralel, jadi dua
+  permintaan bersamaan akan memilih nomor yang sama, dan mengulanginya tidak
+  menolong — percobaan ulang membaca angka yang sama lagi. Pakai
+  `allocateDocumentNumbers()` dari `@/lib/db/document-number`; penambahannya
+  atomik di basis data.
+- Nomor terpakai begitu diberikan, walau penulisan sesudahnya gagal. Urutan bisa
+  berlubang, dan itu disengaja — jauh lebih baik daripada nomor kembar.
 
 ## Aturan bisnis yang paling sering terlewat
 

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { prisma } from '@/lib/db/prisma';
 import { stringifyJson } from '@/lib/db/json';
-import { buildDocumentNumber } from '@/lib/format';
+import { allocateDocumentNumbers } from '@/lib/db/document-number';
 import {
   COUNTED_CUSTOM_STATUSES,
   CUSTOM_REQUEST_STATUSES,
@@ -123,50 +123,16 @@ function done(message: string, extra?: Omit<ProjectServiceResult, 'ok' | 'messag
 // Penomoran dokumen
 // ---------------------------------------------------------------------------
 
-/**
- * Memesan nomor berurutan yang benar-benar bebas.
- *
- * Sengaja tidak memakai "ambil nomor terbesar lalu tambah satu": data contoh
- * dan data lama bisa memakai lebar digit berbeda (PRJ-2026-001 vs
- * PRJ-2026-0001) sehingga urutan string menipu. Kandidat karena itu dinaikkan
- * sampai menemukan nomor yang belum terpakai.
- */
-function nextFreeNumber(prefixCode: string, year: number, taken: Set<string>, startAt: number): string {
-  let sequence = Math.max(1, startAt);
-  for (let guard = 0; guard < 10_000; guard += 1) {
-    const candidate = buildDocumentNumber(prefixCode, year, sequence);
-    if (!taken.has(candidate)) {
-      taken.add(candidate);
-      return candidate;
-    }
-    sequence += 1;
-  }
-  throw new Error(`Nomor ${prefixCode} tidak dapat dipesan.`);
-}
-
+// Keduanya menumpang pencacah atomik di src/lib/db/document-number.ts; nomor
+// yang diberikan pasti belum pernah dipakai, bahkan saat beberapa konversi
+// proyek berjalan bersamaan.
 async function reserveProjectCode(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `PRJ-${year}-`;
-  const rows = await prisma.project.findMany({
-    where: { code: { startsWith: prefix } },
-    select: { code: true },
-  });
-  return nextFreeNumber('PRJ', year, new Set(rows.map((row) => row.code)), rows.length + 1);
+  const [code] = await allocateDocumentNumbers('PRJ', 1);
+  return code;
 }
 
 async function reserveInvoiceNumbers(count: number): Promise<string[]> {
-  const year = new Date().getFullYear();
-  const prefix = `INV-${year}-`;
-  const rows = await prisma.invoice.findMany({
-    where: { number: { startsWith: prefix } },
-    select: { number: true },
-  });
-  const taken = new Set(rows.map((row) => row.number));
-  const numbers: string[] = [];
-  for (let index = 0; index < count; index += 1) {
-    numbers.push(nextFreeNumber('INV', year, taken, rows.length + 1 + index));
-  }
-  return numbers;
+  return allocateDocumentNumbers('INV', count);
 }
 
 function invoiceAmounts(subtotal: number): { subtotal: number; taxAmount: number; total: number } {
@@ -640,8 +606,8 @@ export async function createMilestone(input: CreateMilestoneInput): Promise<Proj
   const amount = Math.round((project.contractValue * input.percentage) / 100);
   const sortOrder = project.milestones.reduce((max, m) => Math.max(max, m.sortOrder + 1), 0);
   const dueDate = input.dueDate ?? null;
-  // Nomor invoice dipesan sebelum transaksi dibuka: SQLite mengunci basis data
-  // selama transaksi tulis, jadi pembacaan di dalamnya bisa saling menunggu.
+  // Nomor dipesan sebelum transaksi dibuka supaya transaksinya sependek mungkin;
+  // pemesanannya sendiri sudah atomik (lihat allocateDocumentNumbers).
   const invoiceNumber = amount > 0 ? (await reserveInvoiceNumbers(1))[0] : null;
 
   await prisma.$transaction(async (tx) => {

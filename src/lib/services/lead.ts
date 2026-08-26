@@ -2,7 +2,7 @@ import 'server-only';
 
 import { prisma } from '@/lib/db/prisma';
 import { stringifyJson } from '@/lib/db/json';
-import { buildDocumentNumber } from '@/lib/format';
+import { allocateDocumentNumbers } from '@/lib/db/document-number';
 import {
   type ActivityKind,
   type BudgetBand,
@@ -17,22 +17,10 @@ import {
 } from './configuration';
 import { getPricingRuleById } from './pricing-rule';
 
-/**
- * Nomor penawaran berurutan per tahun: RKT-2026-0001.
- *
- * Dipesan di dalam transaksi agar dua pengiriman bersamaan tidak mendapat
- * nomor yang sama.
- */
+/** Nomor penawaran berurutan per tahun: RKT-2026-0001. */
 async function reserveQuoteNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `RKT-${year}-`;
-  const last = await prisma.lead.findFirst({
-    where: { quoteNumber: { startsWith: prefix } },
-    orderBy: { quoteNumber: 'desc' },
-    select: { quoteNumber: true },
-  });
-  const sequence = last ? Number(last.quoteNumber.slice(prefix.length)) + 1 : 1;
-  return buildDocumentNumber('RKT', year, sequence);
+  const [number] = await allocateDocumentNumbers('RKT', 1);
+  return number;
 }
 
 export interface SubmitConfigurationInput {

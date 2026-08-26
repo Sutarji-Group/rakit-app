@@ -1,9 +1,14 @@
 /**
  * Helper baca/tulis kolom JSON.
  *
- * SQLite tidak mendukung tipe Json di Prisma, sehingga seluruh payload JSON
- * disimpan sebagai String. Seluruh akses melewati modul ini agar migrasi ke
- * Postgres cukup mengubah tipe kolom tanpa menyentuh kode pemanggil.
+ * Payload JSON disimpan sebagai String, bukan tipe Json milik Postgres. Tidak
+ * ada satu pun kueri yang menyaring atau mengurutkan berdasarkan isi JSON —
+ * semuanya dibaca utuh — jadi tipe Json hanya akan menambah jalur konversi
+ * tanpa menambah kemampuan.
+ *
+ * Konsekuensinya: isi kolom ini tidak divalidasi basis data. parseJson selalu
+ * mengembalikan fallback bila isinya rusak, sehingga satu baris cacat tidak
+ * menjatuhkan halaman yang membacanya.
  */
 
 export function parseJson<T>(value: string | null | undefined, fallback: T): T {

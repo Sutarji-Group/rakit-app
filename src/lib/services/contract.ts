@@ -2,7 +2,8 @@ import 'server-only';
 
 import { prisma } from '@/lib/db/prisma';
 import { parseJson, stringifyJson } from '@/lib/db/json';
-import { buildDocumentNumber, formatDate, formatRupiah } from '@/lib/format';
+import { allocateDocumentNumbers } from '@/lib/db/document-number';
+import { formatDate, formatRupiah } from '@/lib/format';
 import { site, DEFAULT_ASSUMPTIONS, DEFAULT_EXCLUSIONS } from '@/lib/site';
 import {
   PROJECT_DEPLOYMENT_LABEL,
@@ -77,15 +78,8 @@ function acceptanceCriteria(name: string, type: FeatureType): string {
 }
 
 async function reserveContractNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `KTR-${year}-`;
-  const last = await prisma.contract.findFirst({
-    where: { number: { startsWith: prefix } },
-    orderBy: { number: 'desc' },
-    select: { number: true },
-  });
-  const sequence = last ? Number(last.number.slice(prefix.length)) + 1 : 1;
-  return buildDocumentNumber('KTR', year, sequence);
+  const [number] = await allocateDocumentNumbers('KTR', 1);
+  return number;
 }
 
 /**
