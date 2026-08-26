@@ -1,0 +1,1136 @@
+// ============================================================================
+// RAKIT — Platform Jasa Pembuatan Aplikasi Berbasis Konfigurator Fitur
+// Skema data mengacu pada PRD v1.1 bagian 10 (Model Data Konseptual).
+//
+// Catatan provider:
+//   Default SQLite agar aplikasi monolith ini bisa dijalankan tanpa layanan
+//   eksternal. Untuk produksi, ganti provider ke "postgresql" — seluruh model
+//   di bawah kompatibel. Kolom bertipe JSON disimpan sebagai String karena
+//   SQLite tidak mendukung tipe Json; akses selalu lewat helper di
+//   src/lib/db/json.ts sehingga migrasi ke Postgres cukup mengubah tipe kolom.
+//
+// Enum juga direpresentasikan sebagai String (SQLite tidak mendukung enum).
+// Union type TypeScript untuk tiap kolom tersebut ada di src/lib/domain/enums.ts
+// dan divalidasi lewat Zod di lapisan service.
+// ============================================================================
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+// ---------------------------------------------------------------------------
+// PENGGUNA & AKSES
+// ---------------------------------------------------------------------------
+
+/// Pengguna internal (Admin Katalog, Consultant, Sales, PM) maupun klien.
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  phone        String?
+  company      String?
+  /// UserRole: SUPER_ADMIN | CATALOG_ADMIN | CONSULTANT | SALES | PM | CLIENT
+  role         String    @default("CLIENT")
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  configurations       Configuration[]        @relation("ConfigurationOwner")
+  ownedLeads           Lead[]                 @relation("LeadOwner")
+  leadActivities       LeadActivity[]
+  reviewedRequests     CustomFeatureRequest[] @relation("CustomRequestReviewer")
+  assignedTasks        ProjectTask[]          @relation("TaskAssignee")
+  managedProjects      Project[]              @relation("ProjectManager")
+  clientProjects       Project[]              @relation("ProjectClient")
+  auditLogs            AuditLog[]
+  discussionMessages   DiscussionMessage[]
+  authoredPricingRules PricingRule[]          @relation("PricingRuleAuthor")
+  sessions             Session[]
+
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// KATALOG APLIKASI
+// ---------------------------------------------------------------------------
+
+/// Kategori aplikasi yang dijual: WMS, CRM, POS, HRIS, ...
+model ApplicationCategory {
+  id              String  @id @default(cuid())
+  slug            String  @unique
+  name            String
+  shortName       String
+  icon            String  @default("Package")
+  accent          String  @default("indigo")
+  tagline         String
+  description     String
+  /// Deskripsi panjang (markdown ringan) untuk halaman kategori & SEO.
+  longDescription String?
+  /// Daftar manfaat utama, JSON: string[]
+  benefits        String  @default("[]")
+  /// Contoh masalah yang diselesaikan, JSON: { title, body }[]
+  painPoints      String  @default("[]")
+  sortOrder       Int     @default(0)
+  /// PublishStatus: DRAFT | PUBLISHED | ARCHIVED
+  status          String  @default("DRAFT")
+
+  /// Rentang harga tipikal untuk kartu di landing (A3). Dihitung ulang oleh
+  /// job kalibrasi dari preset, tetapi dapat dikunci manual oleh admin.
+  typicalPriceMin         Int?
+  typicalPriceMax         Int?
+  typicalDurationWeeksMin Int?
+  typicalDurationWeeksMax Int?
+  typicalPriceLocked      Boolean @default(false)
+
+  /// Ambang kelayakan minimum (C3.5): jumlah fitur berbayar minimal agar
+  /// konfigurasi dianggap sebagai aplikasi utuh.
+  minViableFeatureCount Int @default(8)
+
+  seoTitle       String?
+  seoDescription String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  featureGroups   FeatureGroup[]
+  features        Feature[]
+  presets         Preset[]
+  wizardQuestions WizardQuestion[]
+  configurations  Configuration[]
+  addOnLinks      AddOnCategory[]
+
+  @@index([status, sortOrder])
+}
+
+/// Kelompok fitur di dalam satu kategori aplikasi (Master Data, Penerimaan, ...)
+model FeatureGroup {
+  id          String  @id @default(cuid())
+  categoryId  String
+  slug        String
+  name        String
+  description String?
+  icon        String  @default("Layers")
+  sortOrder   Int     @default(0)
+
+  category ApplicationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  features Feature[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, sortOrder])
+}
+
+/// Satu fitur yang dapat dirakit klien.
+///
+/// PENTING (BR-18): manDayMin/manDayMax adalah *man-day referensi* — effort
+/// seandainya fitur dibangun dari nol. Bukan effort aktual tim. Harga jual
+/// diturunkan lewat pengali tipe fitur pada PricingRule.
+model Feature {
+  id                  String  @id @default(cuid())
+  categoryId          String
+  groupId             String
+  slug                String
+  name                String
+  /// Deskripsi untuk klien — bahasa manfaat operasional (Prinsip Produk #4).
+  clientDescription   String
+  /// Catatan teknis internal, tidak pernah tampil ke klien.
+  internalDescription String?
+  /// FeatureType: CORE | STANDARD | CONFIGURABLE
+  type                String  @default("STANDARD")
+
+  manDayMin Float
+  manDayMax Float
+
+  /// Override rasio effort riil terhadap man-day referensi (6.3). Bila null,
+  /// dipakai nilai default per tipe dari PricingRule.
+  effortRatioOverride Float?
+
+  /// Ditandai sebagai fitur esensial untuk validasi keranjang minimum (C3.5).
+  isEssential Boolean @default(false)
+
+  /// Kata kunci pencarian tambahan (C5.1), JSON: string[]
+  keywords String @default("[]")
+
+  /// PublishStatus: DRAFT | PUBLISHED | ARCHIVED
+  status    String @default("DRAFT")
+  sortOrder Int    @default(0)
+
+  /// Jejak flywheel (bagian 2.3 & N5): fitur ini hasil promosi dari request custom.
+  promotedFromRequestId String?
+
+  seoTitle       String?
+  seoDescription String?
+
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  category ApplicationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  group    FeatureGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  media              FeatureMedia[]
+  dependencies       FeatureDependency[]   @relation("DependencySource")
+  dependents         FeatureDependency[]   @relation("DependencyTarget")
+  presetFeatures     PresetFeature[]
+  wizardOptionLinks  WizardOptionFeature[]
+  configurationItems ConfigurationItem[]
+  projectTasks       ProjectTask[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, groupId, sortOrder])
+  @@index([status])
+  @@index([type])
+}
+
+/// Tangkapan layar / GIF contoh fitur dari proyek sebelumnya (C2.6).
+model FeatureMedia {
+  id        String  @id @default(cuid())
+  featureId String
+  /// MediaKind: IMAGE | GIF | VIDEO | DIAGRAM
+  kind      String  @default("IMAGE")
+  url       String
+  caption   String?
+  sortOrder Int     @default(0)
+
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@index([featureId, sortOrder])
+}
+
+/// Relasi antar fitur — mesin dependensi (C3, Lampiran B).
+model FeatureDependency {
+  id              String  @id @default(cuid())
+  featureId       String
+  targetFeatureId String
+  /// DependencyKind: REQUIRES | CONFLICTS_WITH | RECOMMENDS
+  kind            String
+  /// Penjelasan yang ditampilkan ke klien saat aturan ini berjalan.
+  note            String?
+
+  feature Feature @relation("DependencySource", fields: [featureId], references: [id], onDelete: Cascade)
+  target  Feature @relation("DependencyTarget", fields: [targetFeatureId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, targetFeatureId, kind])
+  @@index([featureId])
+  @@index([targetFeatureId])
+}
+
+// ---------------------------------------------------------------------------
+// PRESET & WIZARD
+// ---------------------------------------------------------------------------
+
+model Preset {
+  id          String  @id @default(cuid())
+  categoryId  String
+  slug        String
+  name        String
+  tagline     String
+  description String
+  /// Untuk siapa preset ini, JSON: string[]
+  bestFor     String  @default("[]")
+  sortOrder   Int     @default(0)
+  isDefault   Boolean @default(false)
+  /// PublishStatus
+  status      String  @default("PUBLISHED")
+
+  category       ApplicationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  presetFeatures PresetFeature[]
+  configurations Configuration[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, sortOrder])
+}
+
+model PresetFeature {
+  id        String @id @default(cuid())
+  presetId  String
+  featureId String
+
+  preset  Preset  @relation(fields: [presetId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([presetId, featureId])
+}
+
+/// Pertanyaan wizard rekomendasi (B). Maksimal 6 per kategori (B1).
+model WizardQuestion {
+  id         String  @id @default(cuid())
+  categoryId String
+  slug       String
+  question   String
+  helpText   String?
+  /// WizardInputType: SINGLE | MULTI
+  inputType  String  @default("SINGLE")
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+
+  category ApplicationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  options  WizardOption[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, sortOrder])
+}
+
+model WizardOption {
+  id                String  @id @default(cuid())
+  questionId        String
+  slug              String
+  label             String
+  description       String?
+  icon              String  @default("Circle")
+  sortOrder         Int     @default(0)
+  /// Bila dipilih, preset ini dijadikan basis rakitan (opsional).
+  suggestPresetSlug String?
+
+  question     WizardQuestion        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  featureLinks WizardOptionFeature[]
+
+  @@unique([questionId, slug])
+  @@index([questionId, sortOrder])
+}
+
+/// Aturan pemetaan jawaban wizard → fitur (B3), lengkap dengan alasan (B4).
+model WizardOptionFeature {
+  id        String @id @default(cuid())
+  optionId  String
+  featureId String
+  /// Kalimat "Direkomendasikan karena ..." yang ditampilkan di konfigurator.
+  reason    String
+
+  option  WizardOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  feature Feature      @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, featureId])
+}
+
+// ---------------------------------------------------------------------------
+// MESIN HARGA
+// ---------------------------------------------------------------------------
+
+/// Aturan harga ber-versi (M8, BR-07). Konfigurasi yang sudah terbit selalu
+/// dihitung dengan versi aturan yang berlaku saat itu.
+model PricingRule {
+  id            String   @id @default(cuid())
+  version       Int      @unique
+  label         String
+  notes         String?
+  isActive      Boolean  @default(false)
+  effectiveFrom DateTime @default(now())
+  authorId      String?
+
+  // -- Tarif & pengali (6.3) -------------------------------------------------
+  referenceRatePerManDay Int   @default(3200000)
+  multiplierStandard     Float @default(0.55)
+  multiplierConfigurable Float @default(1.0)
+  multiplierCustom       Float @default(1.5)
+  /// Harga paket dasar Core — tarif tetap, bukan per fitur (6.3).
+  corePackagePrice       Int   @default(25000000)
+
+  // -- Rasio effort riil terhadap man-day referensi (6.3) --------------------
+  effortRatioCore         Float @default(0.15)
+  effortRatioStandard     Float @default(0.25)
+  effortRatioConfigurable Float @default(0.80)
+  effortRatioCustom       Float @default(1.10)
+  /// Effort riil tambahan untuk merakit kerangka paket dasar (shell aplikasi,
+  /// autentikasi, peran, kerangka deployment). Effort tiap fitur Core sendiri
+  /// sudah dihitung terpisah lewat effortRatioCore, jadi angka ini hanya
+  /// menutup pekerjaan yang tidak terwakili entri katalog mana pun.
+  corePackageManDay       Float @default(2)
+  /// Effort riil tetap untuk setup, deployment, onboarding, dan training dasar.
+  setupEffortManDay       Float @default(4.5)
+  /// Overhead koordinasi yang tumbuh mengikuti ukuran proyek (di atas beban
+  /// peran pendukung yang sudah masuk ke COGS per man-day).
+  overheadEffortRatio     Float @default(0.12)
+
+  // -- Asumsi biaya internal (6.2, M3) --------------------------------------
+  avgDeveloperSalary        Int   @default(12000000)
+  burdenFactor              Float @default(1.35)
+  effectiveWorkDaysPerMonth Float @default(19.4)
+  billableUtilization       Float @default(0.65)
+  supportRoleRatio          Float @default(0.45)
+  /// Bila diisi, menimpa hasil perhitungan COGS per man-day.
+  cogsPerManDayOverride     Int?
+
+  // -- Pengali & biaya tingkat proyek (6.5) ---------------------------------
+  /// JSON: { WEB: 1.0, WEB_PWA: 1.25, WEB_NATIVE: 1.6 }
+  platformMultipliers   String @default("{}")
+  /// JSON: { OUR_CLOUD: 1.0, CLIENT_SERVER: 1.1, ON_PREMISE: 1.25 }
+  deploymentMultipliers String @default("{}")
+  /// JSON: [{ tier, label, monthlyMin, monthlyMax }]
+  userTierPricing       String @default("[]")
+  /// Biaya setup & onboarding tetap (BR-14).
+  setupFee              Int    @default(10000000)
+
+  // -- Diskon skala (6.6) ----------------------------------------------------
+  /// JSON: [{ minFeatures, maxFeatures|null, discountPct }]
+  volumeDiscountTiers String @default("[]")
+
+  /// PRD 6.6 menyebut dasar diskon adalah "jumlah fitur berbayar", sementara
+  /// Lampiran C melabeli rakitan 28 fitur (8 di antaranya Core) sebagai tier
+  /// "26–40 fitur". Flag ini menutup ambiguitas tersebut secara eksplisit:
+  /// false (bawaan) menghitung fitur berbayar saja sesuai teks aturan,
+  /// true ikut menghitung fitur Core sesuai pembacaan Lampiran C.
+  discountCountsCoreFeatures Boolean @default(false)
+
+  // -- Pagar pengaman komersial (6.8, M7) -----------------------------------
+  minProjectValue              Int   @default(35000000)
+  maxCustomSharePct            Float @default(0.4)
+  salesOverrideQuotaPct        Float @default(0.1)
+  minGrossMarginPct            Float @default(0.4)
+  targetGrossMarginMin         Float @default(0.5)
+  targetGrossMarginMax         Float @default(0.55)
+  /// Ambang man-day fitur custom yang memicu tawaran konsultasi (D7).
+  customManDayConsultThreshold Float @default(20)
+
+  // -- Batas lebar rentang per tipe (6.1, BR-05) ----------------------------
+  rangeWidthCore         Float @default(1.15)
+  rangeWidthStandard     Float @default(1.30)
+  rangeWidthConfigurable Float @default(1.80)
+  rangeWidthCustom       Float @default(2.00)
+
+  // -- Estimasi durasi -------------------------------------------------------
+  /// Jumlah developer efektif yang bekerja paralel pada satu proyek.
+  parallelDevelopers   Float @default(2.5)
+  workDaysPerWeek      Float @default(5)
+  /// Minggu tambahan tetap untuk discovery, UAT, dan deployment.
+  fixedDurationWeeks   Float @default(2)
+  /// Faktor pelebaran durasi pada batas atas rentang.
+  durationBufferFactor Float @default(1.25)
+
+  // -- Masa berlaku penawaran (BR-06) ---------------------------------------
+  quoteValidityDays Int @default(30)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author         User?           @relation("PricingRuleAuthor", fields: [authorId], references: [id])
+  configurations Configuration[]
+  priceSnapshots PriceSnapshot[]
+
+  @@index([isActive])
+}
+
+/// Add-on tingkat proyek: integrasi, migrasi, training, maintenance (6.5, M5).
+model AddOn {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  /// AddOnKind: INTEGRATION | MIGRATION | TRAINING | MAINTENANCE | HOSTING | OTHER
+  kind        String
+  name        String
+  description String
+  icon        String  @default("Puzzle")
+  logoUrl     String?
+
+  priceMin  Int
+  priceMax  Int
+  /// Effort riil (man-day) untuk proyeksi COGS.
+  manDayMin Float @default(0)
+  manDayMax Float @default(0)
+
+  /// Biaya berulang bulanan (BR-12) — selalu ditampilkan terpisah.
+  isRecurring Boolean @default(false)
+
+  /// Untuk add-on dalam satu kelompok pilihan tunggal (mis. tingkat migrasi).
+  optionGroup String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+  /// Bila true, add-on tersedia untuk semua kategori aplikasi.
+  isGlobal    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categories     AddOnCategory[]
+  configurations ConfigurationAddOn[]
+
+  @@index([kind, sortOrder])
+}
+
+model AddOnCategory {
+  id         String @id @default(cuid())
+  addOnId    String
+  categoryId String
+
+  addOn    AddOn               @relation(fields: [addOnId], references: [id], onDelete: Cascade)
+  category ApplicationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([addOnId, categoryId])
+}
+
+// ---------------------------------------------------------------------------
+// KONFIGURASI — OBJEK SENTRAL
+// ---------------------------------------------------------------------------
+
+/// Rakitan klien. Mengalir dari konfigurator → penawaran → kontrak → proyek.
+///
+/// Bersifat immutable snapshot saat status berpindah dari DRAFT (bagian 10):
+/// seluruh nilai harga & atribut fitur dibekukan di ConfigurationItem dan
+/// PriceSnapshot, sehingga perubahan katalog/tarif tidak mengubah penawaran
+/// yang sudah terbit.
+model Configuration {
+  id            String  @id @default(cuid())
+  /// Token publik untuk tautan simpan/lanjutkan & berbagi (C5.3, C5.4).
+  publicToken   String  @unique
+  categoryId    String
+  presetId      String?
+  ownerId       String?
+  pricingRuleId String
+
+  name   String @default("Rakitan Saya")
+  /// ConfigurationStatus:
+  /// DRAFT | SUBMITTED | AWAITING_CUSTOM_ESTIMATE | QUOTED | LOCKED | CONVERTED | ARCHIVED
+  status String @default("DRAFT")
+
+  /// ConfigurationSource: DIRECT | WIZARD | PRESET | DUPLICATE | CHANGE_REQUEST
+  source String @default("DIRECT")
+
+  /// Jawaban wizard, JSON: { [questionSlug]: string[] }
+  wizardAnswers String @default("{}")
+
+  // -- Konfigurasi proyek (E) -----------------------------------------------
+  /// ProjectPlatform: WEB | WEB_PWA | WEB_NATIVE
+  platform                String  @default("WEB")
+  /// ProjectDeployment: OUR_CLOUD | CLIENT_SERVER | ON_PREMISE
+  deployment              String  @default("OUR_CLOUD")
+  /// UserTier: T10 | T50 | T200 | T200_PLUS
+  userTier                String  @default("T10")
+  projectOptionsCompleted Boolean @default(false)
+
+  // -- Ringkasan harga hasil perhitungan (dibekukan setelah submit) ---------
+  subtotalMin         Int   @default(0)
+  subtotalMax         Int   @default(0)
+  discountPct         Float @default(0)
+  discountMin         Int   @default(0)
+  discountMax         Int   @default(0)
+  addOnMin            Int   @default(0)
+  addOnMax            Int   @default(0)
+  setupFee            Int   @default(0)
+  totalMin            Int   @default(0)
+  totalMax            Int   @default(0)
+  recurringMonthlyMin Int   @default(0)
+  recurringMonthlyMax Int   @default(0)
+
+  durationWeeksMin Int @default(0)
+  durationWeeksMax Int @default(0)
+
+  /// Nilai internal — tidak pernah ditampilkan ke klien (6.4).
+  cogsProjection   Int   @default(0)
+  grossMarginPct   Float @default(0)
+  realEffortManDay Float @default(0)
+  customSharePct   Float @default(0)
+
+  // -- Penanda pagar pengaman & review internal ------------------------------
+  /// Di bawah nilai proyek minimum (BR-13).
+  belowMinProjectValue Boolean @default(false)
+  /// Porsi custom melebihi batas (BR-15).
+  exceedsCustomShare   Boolean @default(false)
+  /// Di bawah ambang kelayakan fungsional (BR-08 / C3.5).
+  belowMinViable       Boolean @default(false)
+  /// Proyeksi gross margin di bawah ambang (BR-17).
+  belowMinMargin       Boolean @default(false)
+  /// Ringkasan alasan penandaan, JSON: string[]
+  guardrailNotes       String  @default("[]")
+
+  // -- Penguncian harga (6.9, BR-11) ----------------------------------------
+  isPriceLocked Boolean   @default(false)
+  lockedPrice   Int?
+  lockedAt      DateTime?
+  lockedUntil   DateTime?
+  lockedById    String?
+
+  // -- Instrumentasi ---------------------------------------------------------
+  trafficSource    String?
+  timeSpentSeconds Int       @default(0)
+  lastActivityAt   DateTime  @default(now())
+  submittedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category    ApplicationCategory @relation(fields: [categoryId], references: [id])
+  preset      Preset?             @relation(fields: [presetId], references: [id])
+  owner       User?               @relation("ConfigurationOwner", fields: [ownerId], references: [id])
+  pricingRule PricingRule         @relation(fields: [pricingRuleId], references: [id])
+
+  items          ConfigurationItem[]
+  customRequests CustomFeatureRequest[]
+  addOns         ConfigurationAddOn[]
+  priceSnapshots PriceSnapshot[]
+  revisions      ConfigurationRevision[]
+  lead           Lead?
+  project        Project?
+  changeRequest  ChangeRequest?          @relation("ChangeRequestAddendum")
+  events         AnalyticsEvent[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+/// Satu fitur di dalam rakitan, lengkap dengan snapshot atribut & harga.
+model ConfigurationItem {
+  id              String @id @default(cuid())
+  configurationId String
+  featureId       String
+
+  /// ItemOrigin: PRESET | USER | DEPENDENCY | WIZARD | CORE_AUTO | CHANGE_REQUEST
+  origin               String  @default("USER")
+  /// Alasan yang ditampilkan ke klien bila origin = DEPENDENCY / WIZARD.
+  reason               String?
+  /// Fitur pemicu bila ditambahkan oleh mesin dependensi.
+  triggeredByFeatureId String?
+
+  // -- Snapshot (dibekukan saat submit) -------------------------------------
+  nameSnapshot String
+  typeSnapshot String
+  manDayMin    Float
+  manDayMax    Float
+  unitPriceMin Int
+  unitPriceMax Int
+  effortManDay Float  @default(0)
+
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  configuration Configuration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  feature       Feature       @relation(fields: [featureId], references: [id])
+
+  @@unique([configurationId, featureId])
+  @@index([configurationId])
+}
+
+/// Add-on yang dipilih pada satu konfigurasi.
+model ConfigurationAddOn {
+  id              String @id @default(cuid())
+  configurationId String
+  addOnId         String
+
+  nameSnapshot String
+  kindSnapshot String
+  priceMin     Int
+  priceMax     Int
+  isRecurring  Boolean @default(false)
+  manDayMin    Float   @default(0)
+  manDayMax    Float   @default(0)
+
+  configuration Configuration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  addOn         AddOn         @relation(fields: [addOnId], references: [id])
+
+  @@unique([configurationId, addOnId])
+  @@index([configurationId])
+}
+
+/// Pengajuan fitur custom (D). Tidak pernah masuk total sebelum diestimasi
+/// manusia (BR-02).
+model CustomFeatureRequest {
+  id              String  @id @default(cuid())
+  configurationId String
+  /// Kelompok fitur tempat request diajukan (untuk konteks reviewer).
+  groupId         String?
+
+  name           String
+  problem        String
+  userRoles      String
+  /// Alur ideal langkah demi langkah, JSON: string[]
+  flowSteps      String @default("[]")
+  /// RequestPriority: MUST_HAVE | NICE_TO_HAVE
+  priority       String @default("MUST_HAVE")
+  /// Lampiran referensi, JSON: { name, url, kind }[]
+  attachments    String @default("[]")
+  referenceLinks String @default("[]")
+
+  /// CustomRequestStatus:
+  /// PENDING | IN_REVIEW | NEEDS_CLARIFICATION | ESTIMATED | REJECTED | CONSULT_REQUIRED | PROMOTED
+  status String @default("PENDING")
+
+  // -- Hasil review (N3) -----------------------------------------------------
+  manDayMin             Float?
+  manDayMax             Float?
+  unitPriceMin          Int?
+  unitPriceMax          Int?
+  /// RiskLevel: LOW | MEDIUM | HIGH
+  riskLevel             String?
+  internalNote          String?
+  clarificationQuestion String?
+  clarificationAnswer   String?
+  rejectReason          String?
+
+  reviewerId  String?
+  slaDueAt    DateTime
+  estimatedAt DateTime?
+
+  /// Fitur katalog hasil promosi (N5) — mekanisme flywheel.
+  promotedFeatureId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  configuration Configuration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  reviewer      User?         @relation("CustomRequestReviewer", fields: [reviewerId], references: [id])
+  projectTasks  ProjectTask[]
+
+  @@index([status, slaDueAt])
+  @@index([configurationId])
+}
+
+/// Snapshot perhitungan harga lengkap pada satu momen (bagian 10).
+model PriceSnapshot {
+  id              String   @id @default(cuid())
+  configurationId String
+  pricingRuleId   String
+  /// SnapshotReason: AUTOSAVE | SUBMIT | REVIEW_UPDATE | LOCK | OVERRIDE | ADDENDUM
+  reason          String   @default("SUBMIT")
+  /// Hasil lengkap PriceBreakdown, JSON.
+  payload         String
+  totalMin        Int
+  totalMax        Int
+  createdAt       DateTime @default(now())
+
+  configuration Configuration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  pricingRule   PricingRule   @relation(fields: [pricingRuleId], references: [id])
+
+  @@index([configurationId, createdAt])
+}
+
+/// Riwayat versi konfigurasi (G3) & jejak perubahan keranjang (O2).
+model ConfigurationRevision {
+  id              String   @id @default(cuid())
+  configurationId String
+  version         Int
+  /// RevisionAction: FEATURE_ADDED | FEATURE_REMOVED | PRESET_APPLIED | OPTIONS_CHANGED |
+  /// CUSTOM_ADDED | ADDON_CHANGED | SUBMITTED | PRICE_OVERRIDE | ESTIMATE_UPDATED
+  action          String
+  summary         String
+  /// Detail perubahan, JSON.
+  detail          String   @default("{}")
+  totalMin        Int      @default(0)
+  totalMax        Int      @default(0)
+  actorLabel      String   @default("Klien")
+  createdAt       DateTime @default(now())
+
+  configuration Configuration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+
+  @@unique([configurationId, version])
+  @@index([configurationId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// PIPELINE LEAD / QUOTE
+// ---------------------------------------------------------------------------
+
+model Lead {
+  id              String @id @default(cuid())
+  quoteNumber     String @unique
+  configurationId String @unique
+
+  contactName String
+  company     String?
+  email       String
+  whatsapp    String
+  /// BudgetBand: UNDER_50 | B50_100 | B100_250 | B250_500 | ABOVE_500 | UNKNOWN
+  budgetBand  String  @default("UNKNOWN")
+  note        String?
+
+  /// LeadStage: NEW | IN_REVIEW | DISCOVERY_SCHEDULED | FINAL_PROPOSAL | NEGOTIATION | WON | LOST
+  stage      String  @default("NEW")
+  ownerId    String?
+  /// Wajib diisi saat stage = LOST (O5).
+  lostReason String?
+  lostNote   String?
+
+  /// Ditandai bila porsi custom > batas (BR-15).
+  needsDeepDiscovery Boolean @default(false)
+
+  // -- Override harga (O6, BR-16) -------------------------------------------
+  overridePricePct     Float?
+  overridePriceValue   Int?
+  overrideReason       String?
+  overrideApprovedById String?
+  overrideApprovedAt   DateTime?
+  /// OverrideStatus: NONE | PENDING_APPROVAL | APPROVED | REJECTED
+  overrideStatus       String    @default("NONE")
+
+  validUntil      DateTime
+  discoveryCallAt DateTime?
+  trafficSource   String?
+  utm             String    @default("{}")
+
+  marketingConsent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  configuration Configuration  @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  owner         User?          @relation("LeadOwner", fields: [ownerId], references: [id])
+  activities    LeadActivity[]
+  project       Project?
+  contract      Contract?
+
+  @@index([stage, updatedAt])
+  @@index([ownerId])
+}
+
+model LeadActivity {
+  id        String    @id @default(cuid())
+  leadId    String
+  userId    String?
+  /// ActivityKind: NOTE | STAGE_CHANGE | CALL | EMAIL | REMINDER | OVERRIDE | SYSTEM
+  kind      String    @default("NOTE")
+  body      String
+  dueAt     DateTime?
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([leadId, createdAt])
+  @@index([dueAt])
+}
+
+// ---------------------------------------------------------------------------
+// KONTRAK, PROYEK, PORTAL KLIEN
+// ---------------------------------------------------------------------------
+
+model Contract {
+  id            String    @id @default(cuid())
+  number        String    @unique
+  leadId        String    @unique
+  /// ContractStatus: DRAFT | SENT | SIGNED | CANCELLED
+  status        String    @default("DRAFT")
+  /// Isi kontrak hasil render template, JSON: { sections: [...] }
+  body          String    @default("{}")
+  totalValue    Int       @default(0)
+  signedAt      DateTime?
+  signerName    String?
+  signerEmail   String?
+  /// Bukti tanda tangan elektronik (mis. Privy/Digisign), JSON.
+  signatureMeta String    @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id              String  @id @default(cuid())
+  code            String  @unique
+  name            String
+  configurationId String  @unique
+  leadId          String? @unique
+  clientId        String?
+  managerId       String?
+
+  /// ProjectStatus: PLANNING | IN_PROGRESS | UAT | DELIVERED | ON_HOLD | CANCELLED
+  status        String    @default("PLANNING")
+  startDate     DateTime?
+  targetEndDate DateTime?
+  actualEndDate DateTime?
+  progressPct   Float     @default(0)
+  stagingUrl    String?
+  demoUrl       String?
+  contractValue Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  configuration Configuration @relation(fields: [configurationId], references: [id])
+  lead          Lead?         @relation(fields: [leadId], references: [id])
+  client        User?         @relation("ProjectClient", fields: [clientId], references: [id])
+  manager       User?         @relation("ProjectManager", fields: [managerId], references: [id])
+
+  tasks          ProjectTask[]
+  milestones     Milestone[]
+  invoices       Invoice[]
+  documents      ProjectDocument[]
+  changeRequests ChangeRequest[]
+
+  @@index([status])
+}
+
+/// Satu fitur = satu item pekerjaan (P1).
+model ProjectTask {
+  id              String  @id @default(cuid())
+  projectId       String
+  featureId       String?
+  customRequestId String?
+
+  title      String
+  /// TaskStatus: QUEUED | IN_PROGRESS | READY_FOR_REVIEW | APPROVED | DONE (J1)
+  status     String  @default("QUEUED")
+  phase      String  @default("Fase 1")
+  assigneeId String?
+
+  estimateManDayMin Float  @default(0)
+  estimateManDayMax Float  @default(0)
+  actualManDay      Float?
+
+  targetDate  DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  approvedAt  DateTime?
+  clientNote  String?
+  sortOrder   Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignee      User?                 @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  project       Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature       Feature?              @relation(fields: [featureId], references: [id])
+  customRequest CustomFeatureRequest? @relation(fields: [customRequestId], references: [id])
+  discussions   DiscussionMessage[]
+
+  @@index([projectId, status])
+  @@index([assigneeId])
+}
+
+model Milestone {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  sortOrder   Int       @default(0)
+  /// Porsi termin pembayaran (H4), mis. 30 / 40 / 30.
+  percentage  Float     @default(0)
+  amount      Int       @default(0)
+  dueDate     DateTime?
+  /// MilestoneStatus: PENDING | IN_PROGRESS | AWAITING_APPROVAL | APPROVED | REVISION_REQUESTED
+  status      String    @default("PENDING")
+  approvedAt  DateTime?
+  clientNote  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@index([projectId, sortOrder])
+}
+
+model Invoice {
+  id          String  @id @default(cuid())
+  number      String  @unique
+  projectId   String
+  milestoneId String?
+
+  /// InvoiceKind: DOWN_PAYMENT | MILESTONE | ADDENDUM | MAINTENANCE
+  kind   String @default("MILESTONE")
+  /// InvoiceStatus: DRAFT | SENT | PARTIALLY_PAID | PAID | OVERDUE | CANCELLED
+  status String @default("DRAFT")
+
+  subtotal   Int
+  taxPct     Float @default(11)
+  taxAmount  Int   @default(0)
+  total      Int   @default(0)
+  paidAmount Int   @default(0)
+
+  issuedAt DateTime  @default(now())
+  dueAt    DateTime
+  paidAt   DateTime?
+  note     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone? @relation(fields: [milestoneId], references: [id])
+  payments  Payment[]
+
+  @@index([projectId, status])
+  @@index([dueAt])
+}
+
+model Payment {
+  id             String    @id @default(cuid())
+  invoiceId      String
+  amount         Int
+  /// PaymentMethod: VA | CREDIT_CARD | EWALLET | QRIS | MANUAL_TRANSFER
+  method         String    @default("MANUAL_TRANSFER")
+  /// PaymentStatus: PENDING | AWAITING_VERIFICATION | SETTLED | FAILED | REFUNDED
+  status         String    @default("PENDING")
+  reference      String?
+  proofUrl       String?
+  gatewayPayload String    @default("{}")
+  paidAt         DateTime?
+  verifiedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+/// Ruang diskusi yang melekat pada item pekerjaan (J6).
+model DiscussionMessage {
+  id          String   @id @default(cuid())
+  taskId      String
+  userId      String?
+  authorLabel String   @default("Klien")
+  body        String
+  isInternal  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  task ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User?       @relation(fields: [userId], references: [id])
+
+  @@index([taskId, createdAt])
+}
+
+/// Repositori dokumen proyek (J7).
+model ProjectDocument {
+  id         String   @id @default(cuid())
+  projectId  String
+  name       String
+  /// DocumentKind: CONTRACT | SOW | PROPOSAL | MANUAL | TRAINING | OTHER
+  kind       String   @default("OTHER")
+  url        String
+  sizeLabel  String?
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+/// Change Request dari portal klien (K) — kanal ekspansi pendapatan.
+model ChangeRequest {
+  id                      String  @id @default(cuid())
+  number                  String  @unique
+  projectId               String
+  /// Konfigurasi addendum (rakitan fitur tambahan).
+  addendumConfigurationId String? @unique
+
+  title       String
+  description String?
+  /// ChangeRequestStatus: DRAFT | SUBMITTED | ESTIMATED | APPROVED | REJECTED | CANCELLED
+  status      String  @default("DRAFT")
+
+  priceMin            Int       @default(0)
+  priceMax            Int       @default(0)
+  approvedPrice       Int?
+  /// Dampak terhadap tanggal selesai dalam minggu (K4).
+  timelineImpactWeeks Float     @default(0)
+  newTargetEndDate    DateTime?
+
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  rejectedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project               Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  addendumConfiguration Configuration? @relation("ChangeRequestAddendum", fields: [addendumConfigurationId], references: [id])
+
+  @@index([projectId, status])
+}
+
+// ---------------------------------------------------------------------------
+// INSTRUMENTASI & AUDIT
+// ---------------------------------------------------------------------------
+
+/// Event analitik sesuai daftar minimum bagian 13.
+model AnalyticsEvent {
+  id              String   @id @default(cuid())
+  name            String
+  sessionId       String
+  configurationId String?
+  /// Properti event, JSON.
+  payload         String   @default("{}")
+  path            String?
+  referrer        String?
+  createdAt       DateTime @default(now())
+
+  configuration Configuration? @relation(fields: [configurationId], references: [id], onDelete: SetNull)
+
+  @@index([name, createdAt])
+  @@index([sessionId])
+  @@index([configurationId])
+}
+
+/// Jejak audit seluruh perubahan harga & katalog (NFR: Audit).
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  actorLabel String   @default("system")
+  entity     String
+  entityId   String
+  action     String
+  summary    String
+  before     String   @default("{}")
+  after      String   @default("{}")
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+/// Permintaan konsultasi dari kartu "Aplikasi lain / Belum yakin" (A4) dan
+/// tombol "Bicara dengan konsultan" (C4.7).
+model ConsultationRequest {
+  id                 String   @id @default(cuid())
+  name               String
+  company            String?
+  email              String
+  whatsapp           String
+  /// ConsultationTopic: OTHER_APP | UNSURE | STUCK_IN_CONFIGURATOR | MOSTLY_CUSTOM | TOO_MANY_CUSTOM
+  topic              String   @default("UNSURE")
+  message            String
+  configurationToken String?
+  /// ConsultationStatus: NEW | CONTACTED | SCHEDULED | CLOSED
+  status             String   @default("NEW")
+  handledById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+/// Laporan kalibrasi man-day referensi vs aktual (M9, P5, Q5) — agregat
+/// dihitung dari ProjectTask, tabel ini menyimpan hasil snapshot periodik.
+model CalibrationSnapshot {
+  id              String   @id @default(cuid())
+  featureId       String
+  featureName     String
+  categorySlug    String
+  refManDayAvg    Float
+  actualManDayAvg Float
+  sampleSize      Int
+  deviationPct    Float
+  periodLabel     String
+  createdAt       DateTime @default(now())
+
+  @@index([featureId])
+  @@index([periodLabel])
+}
