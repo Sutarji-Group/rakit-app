@@ -36,15 +36,18 @@ export function PresetCompare({
   const removed = active.featureIds.filter((id) => !selected.has(id));
   const unchanged = active.featureIds.filter((id) => selected.has(id)).length;
 
+  // Kalimatnya disusun utuh di sini, bukan lewat kelas `capitalize`, karena
+  // kelas itu mengapitalkan SETIAP kata dan menghasilkan "Anda Sama Persis
+  // Dengan Paket WMS Growth".
   const summary =
     added.length === 0 && removed.length === 0
-      ? `Sama persis dengan paket ${active.name}`
-      : [
+      ? `Rakitan Anda sama persis dengan paket ${active.name}.`
+      : `Anda ${[
           added.length > 0 ? `menambah ${added.length} fitur` : null,
           removed.length > 0 ? `menghapus ${removed.length} fitur` : null,
         ]
           .filter(Boolean)
-          .join(' dan ');
+          .join(' dan ')} dari paket ${active.name}.`;
 
   return (
     <>
@@ -60,8 +63,8 @@ export function PresetCompare({
           <span className="block text-xs font-medium text-fg">
             Dibanding paket {active.name}
           </span>
-          <span className="mt-0.5 block text-xs capitalize leading-relaxed text-fg-muted">
-            Anda {summary}.
+          <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">
+            {summary}
           </span>
         </span>
       </button>
