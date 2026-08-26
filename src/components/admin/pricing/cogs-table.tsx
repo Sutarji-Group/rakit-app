@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { Alert, Badge, Table, TableWrapper, Td, Th, Tr } from '@/components/ui';
 import { formatNumber, formatPercent, formatRupiah } from '@/lib/format';
 import { deriveCogsPerManDay, type PricingRuleSnapshot } from '@/lib/pricing';
@@ -148,9 +150,9 @@ export function CogsTable({
         </p>
         <p className="mt-2">
           Bandingkan asumsi ini dengan man-day aktual di{' '}
-          <a href="/admin/harga/kalibrasi" className="font-medium underline underline-offset-2">
+          <Link href="/admin/harga/kalibrasi" className="font-medium underline underline-offset-2">
             laporan kalibrasi
-          </a>{' '}
+          </Link>{' '}
           sebelum menaikkan angka utilisasi.
         </p>
       </Alert>

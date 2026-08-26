@@ -9,14 +9,12 @@ import {
   type WizardOptionInput,
   type WizardQuestionInput,
 } from '@/components/admin/catalog/shared';
+import { MAX_WIZARD_QUESTIONS } from '@/components/admin/catalog/shared';
 import { requireArea } from '@/lib/auth/guards';
 import { prisma } from '@/lib/db/prisma';
 import { WIZARD_INPUT_TYPES, coerceEnum } from '@/lib/domain/enums';
 import { slugify } from '@/lib/utils';
 import { recordCatalogAudit } from '../_lib/audit';
-
-/** Batas pertanyaan wizard per kategori (PRD B1). */
-export const MAX_WIZARD_QUESTIONS = 6;
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

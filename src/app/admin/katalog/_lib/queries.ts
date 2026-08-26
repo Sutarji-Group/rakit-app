@@ -452,10 +452,17 @@ export interface PresetRow {
   featureIds: string[];
 }
 
+/** Fitur untuk editor preset — perlu kategori & man-day untuk ringkasan preset. */
+export interface PresetFeatureRow extends DependencyFeatureRow {
+  categoryId: string;
+  manDayMin: number;
+  manDayMax: number;
+}
+
 export interface PresetWorkspace {
   categories: Array<{ id: string; slug: string; name: string; status: PublishStatus }>;
   presets: PresetRow[];
-  features: DependencyFeatureRow[];
+  features: PresetFeatureRow[];
   edges: DependencyEdgeRow[];
 }
 
@@ -496,6 +503,9 @@ export async function loadPresetWorkspace(): Promise<PresetWorkspace> {
       type: coerceEnum(feature.type, FEATURE_TYPES, 'STANDARD'),
       groupId: feature.groupId,
       groupName: feature.group.name,
+      categoryId: feature.categoryId,
+      manDayMin: feature.manDayMin,
+      manDayMax: feature.manDayMax,
       isEssential: feature.isEssential,
       status: coerceEnum(feature.status, PUBLISH_STATUSES, 'DRAFT'),
     })),

@@ -9,8 +9,31 @@
 
 import type { BadgeVariant } from '@/components/ui';
 import { resolveAdd, type DependencyGraph } from '@/lib/configurator/dependency';
-import type { FeatureType, MediaKind, PublishStatus } from '@/lib/domain/enums';
+import type {
+  FeatureType,
+  MediaKind,
+  PublishStatus,
+  WizardInputType,
+} from '@/lib/domain/enums';
 import { priceMultiplierFor, type PricingRuleSnapshot } from '@/lib/pricing';
+
+// ---------------------------------------------------------------------------
+// Batas & label wizard (L5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Batas pertanyaan wizard per kategori (PRD B1).
+ *
+ * Tinggal di berkas netral ini, bukan di berkas Server Action, karena berkas
+ * 'use server' hanya boleh mengekspor fungsi async — sedangkan angka ini juga
+ * dibutuhkan form di browser untuk menonaktifkan tombol tambah.
+ */
+export const MAX_WIZARD_QUESTIONS = 6;
+
+export const WIZARD_INPUT_TYPE_LABEL: Record<WizardInputType, string> = {
+  SINGLE: 'Pilih satu jawaban',
+  MULTI: 'Boleh pilih beberapa',
+};
 
 // ---------------------------------------------------------------------------
 // Hasil aksi
@@ -221,6 +244,14 @@ export function inspectPresetSelection(
 // ---------------------------------------------------------------------------
 // Bentuk data form fitur
 // ---------------------------------------------------------------------------
+
+/** Label bahasa Indonesia untuk jenis media contoh fitur (C2.6). */
+export const MEDIA_KIND_LABEL: Record<MediaKind, string> = {
+  IMAGE: 'Tangkapan layar',
+  GIF: 'Animasi GIF',
+  VIDEO: 'Video',
+  DIAGRAM: 'Diagram alur',
+};
 
 export interface FeatureMediaValues {
   id?: string;

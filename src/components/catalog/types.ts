@@ -45,6 +45,47 @@ export interface FeatureIndexCategory {
   features: FeatureCardData[];
 }
 
+/** Fitur terkait pada halaman detail fitur: prasyarat, saran, atau setetangga. */
+export interface RelatedFeatureView {
+  slug: string;
+  name: string;
+  type: FeatureType;
+  /** Penjelasan aturan untuk klien (FeatureDependency.note), bila ada. */
+  note: string | null;
+}
+
+/**
+ * Isi satu halaman fitur (/fitur/[categorySlug]/[featureSlug]).
+ *
+ * Halaman ini dibuat untuk pencarian organik — orang mencari pekerjaannya
+ * ("aplikasi stock opname"), bukan nama produk kami. Karena itu isinya
+ * lengkap dan berdiri sendiri, bukan sekadar potongan katalog.
+ */
+export interface FeatureDetailView {
+  category: {
+    slug: string;
+    name: string;
+    shortName: string;
+    icon: string;
+    tagline: string;
+  };
+  group: {
+    name: string;
+    description: string | null;
+    icon: string;
+  };
+  feature: FeatureCardData & {
+    seoTitle: string | null;
+    seoDescription: string | null;
+  };
+  /** Fitur yang wajib ikut bila fitur ini dipilih (dependensi REQUIRES). */
+  requires: RelatedFeatureView[];
+  /** Fitur yang biasanya dipasang bersama (dependensi RECOMMENDS). */
+  recommends: RelatedFeatureView[];
+  /** Fitur lain di kelompok yang sama, untuk penjelajahan lanjutan. */
+  siblings: RelatedFeatureView[];
+}
+
 /** Fitur yang direkomendasikan satu jawaban wizard, beserta alasannya (B4). */
 export interface WizardFeatureView {
   id: string;
