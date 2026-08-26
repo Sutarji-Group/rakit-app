@@ -1,6 +1,8 @@
 import 'server-only';
 
-import { SignJWT, jwtVerify } from 'jose';
+// Impor subpath — lihat catatan di src/middleware.ts.
+import { SignJWT } from 'jose/jwt/sign';
+import { jwtVerify } from 'jose/jwt/verify';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db/prisma';
 import { INTERNAL_ROLES, coerceEnum, USER_ROLES, type UserRole } from '@/lib/domain/enums';

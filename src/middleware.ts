@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
+// Impor subpath, bukan 'jose': entry point utamanya ikut menarik kode JWE
+// yang memakai CompressionStream — API yang tidak tersedia di Edge Runtime.
+import { jwtVerify } from 'jose/jwt/verify';
 
 const SESSION_COOKIE = 'rakit_session';
 
@@ -26,8 +28,11 @@ export async function middleware(request: NextRequest) {
     return redirectToLogin(request);
   }
 
+  // AUTH_SECRET hilang berarti tidak ada token yang bisa dibuktikan sah. Rute
+  // terjaga karenanya ditutup, bukan dibuka — salah konfigurasi lingkungan
+  // tidak boleh berujung pada area admin yang bisa dimasuki siapa saja.
   const secret = process.env.AUTH_SECRET;
-  if (!secret) return NextResponse.next();
+  if (!secret) return redirectToLogin(request);
 
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
