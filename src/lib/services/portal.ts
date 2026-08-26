@@ -52,6 +52,18 @@ function fail(message: string, fieldErrors?: Record<string, string>): PortalActi
   return { ok: false, message, fieldErrors };
 }
 
+/**
+ * Pekerjaan yang sudah selesai dari sudut pandang klien.
+ *
+ * APPROVED ikut dihitung karena klien sendiri yang menyetujuinya — sisanya
+ * hanya penutupan administratif di sisi tim. Tanpa ini, papan portal dapat
+ * menampilkan dua angka yang saling bertentangan, misalnya "0/9 selesai" di
+ * sebelah progres 84%, dan klien kehilangan kepercayaan pada keduanya.
+ */
+function isFinished(status: string): boolean {
+  return status === 'DONE' || status === 'APPROVED';
+}
+
 function done(message: string): PortalActionResult {
   return { ok: true, message };
 }
@@ -127,7 +139,7 @@ export async function getClientProjects(userId: string): Promise<ClientProjectSu
     demoUrl: row.demoUrl,
     categoryName: row.configuration.category.name,
     taskTotal: row.tasks.length,
-    taskDone: row.tasks.filter((task) => task.status === 'DONE').length,
+    taskDone: row.tasks.filter((task) => isFinished(task.status)).length,
     awaitingApprovalCount: row.milestones.filter((m) => m.status === 'AWAITING_APPROVAL').length,
     unpaidInvoiceCount: row.invoices.filter((inv) =>
       ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status),
@@ -389,7 +401,7 @@ function summarizePhases(tasks: PortalTask[]): PortalPhase[] {
     return {
       name,
       total: items.length,
-      done: items.filter((task) => task.status === 'DONE').length,
+      done: items.filter((task) => isFinished(task.status)).length,
       progressPct: computeProgress(items.map((task) => task.status)),
     };
   });

@@ -75,8 +75,14 @@ export default async function ProyekPortalPage({
             </p>
           </div>
           <p className="text-sm text-fg-muted">
-            {project.tasks.filter((task) => task.status === 'DONE').length} dari{' '}
-            {project.tasks.length} pekerjaan selesai
+            {/* APPROVED ikut dihitung selesai: klien sendiri yang menyetujuinya,
+                sisanya hanya penutupan administratif di sisi tim. */}
+            {
+              project.tasks.filter(
+                (task) => task.status === 'DONE' || task.status === 'APPROVED',
+              ).length
+            }{' '}
+            dari {project.tasks.length} pekerjaan selesai
           </p>
         </div>
         <Progress value={project.progressPct} className="mt-3" />
