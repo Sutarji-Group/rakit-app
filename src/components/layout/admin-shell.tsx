@@ -34,6 +34,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/admin/harga/kalibrasi', label: 'Laporan Kalibrasi', icon: 'target', section: 'Harga' },
 
   { href: '/admin/proyek', label: 'Proyek & Milestone', icon: 'briefcase', section: 'Delivery' },
+  { href: '/admin/kontrak', label: 'Kontrak Digital', icon: 'contract', section: 'Delivery' },
+  { href: '/admin/tagihan', label: 'Tagihan & Pembayaran', icon: 'receipt', section: 'Delivery' },
 
   { href: '/admin/pengguna', label: 'Pengguna', icon: 'users', section: 'Sistem' },
 ];
@@ -197,6 +199,8 @@ function NavIcon({ name }: { name: string }) {
     puzzle: <path d="M7.5 3.5h2a1.5 1.5 0 0 1 0 3h-2v3h-3a1.5 1.5 0 0 0 0 3h3v3h5v-3h3v-9h-8z" />,
     target: <path d="M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm0 3.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM10 9v2" />,
     briefcase: <path d="M4 6.5h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM7.5 6.5V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M3 10.5h14" />,
+    contract: <path d="M5.5 2.5h6L16 7v10.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1zM11 2.5V7h4.5M7 10.5h6M7 13.5h4" />,
+    receipt: <path d="M5 2.5h10v15l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2V2.5zM7.5 6.5h5M7.5 9.5h5M7.5 12.5h3" />,
     users: <path d="M7.5 9.5a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5zM2.5 16.5c0-2.5 2.2-4.2 5-4.2s5 1.7 5 4.2M13 4.4a2.75 2.75 0 0 1 0 5.2M14.5 12.6c1.8.5 3 1.9 3 3.9" />,
   };
   return (

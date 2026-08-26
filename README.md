@@ -97,35 +97,36 @@ src/app/portal/          Portal klien
 
 | # | Modul | Prioritas | Status |
 |---|---|---|---|
-| A | Landing & Katalog Aplikasi | P0 | ✅ |
-| B | Wizard Rekomendasi | P1 | ✅ |
-| C | Konfigurator Belanja Fitur | P0 | ✅ |
-| D | Pengajuan Fitur Custom | P0 | ✅ |
-| E | Konfigurasi Proyek | P0 | ✅ |
-| F | Ringkasan & Generator Proposal PDF | P0 | ✅ |
-| G | Akun Klien & Simpan Konfigurasi | P1 | ✅ |
-| H | Checkout, DP Online & Invoice | P1 | Invoice & termin ✅ · gateway pembayaran belum tersambung |
-| I | Kontrak Digital | P2 | Model & generator ✅ · tanda tangan elektronik belum tersambung |
-| J | Portal Klien | P1 | ✅ |
-| K | Change Request dari portal | P2 | ✅ |
-| L | Admin: Manajemen Katalog & Fitur | P0 | ✅ |
-| M | Admin: Mesin Harga & Dependensi | P0 | ✅ |
-| N | Admin: Antrean Review Fitur Custom | P0 | ✅ |
-| O | Admin: Pipeline Quote/Lead | P0 | ✅ |
-| P | Admin: Manajemen Proyek & Milestone | P1 | ✅ |
-| Q | Admin: Dashboard Analitik | P1 | ✅ |
+| A | Landing & Katalog Aplikasi | P0 | Selesai |
+| B | Wizard Rekomendasi | P1 | Selesai |
+| C | Konfigurator Belanja Fitur | P0 | Selesai |
+| D | Pengajuan Fitur Custom | P0 | Selesai |
+| E | Konfigurasi Proyek | P0 | Selesai |
+| F | Ringkasan & Generator Proposal PDF | P0 | Selesai |
+| G | Akun Klien & Simpan Konfigurasi | P1 | Selesai |
+| H | Checkout, DP Online & Invoice | P1 | Invoice, termin, dan pembayaran manual selesai · gateway belum tersambung |
+| I | Kontrak Digital | P2 | Generator kontrak & lampiran SOW selesai · tanda tangan elektronik dicatat manual |
+| J | Portal Klien | P1 | Selesai |
+| K | Change Request dari portal | P2 | Selesai |
+| L | Admin: Manajemen Katalog & Fitur | P0 | Selesai |
+| M | Admin: Mesin Harga & Dependensi | P0 | Selesai |
+| N | Admin: Antrean Review Fitur Custom | P0 | Selesai |
+| O | Admin: Pipeline Quote/Lead | P0 | Selesai |
+| P | Admin: Manajemen Proyek & Milestone | P1 | Selesai |
+| Q | Admin: Dashboard Analitik | P1 | Selesai |
 
-### Yang belum tersambung ke layanan luar
+### Yang berhenti di batas integrasi
 
-Bagian berikut sengaja berhenti di batas integrasi, bukan karena belum
-dikerjakan. Titik sambungannya sudah tersedia dan terisolasi:
+Tiga hal berikut sengaja berhenti di titik yang membutuhkan akun atau
+perjanjian dengan pihak ketiga. Semuanya punya jalur pengganti yang benar-benar
+berfungsi, dan tidak ada satu pun yang berpura-pura sudah bekerja:
 
-- **Pengiriman email dan WhatsApp** — notifikasi dicatat dan tautannya
-  disediakan untuk disalin manual. Tidak ada yang berpura-pura terkirim.
-- **Payment gateway** (Midtrans/Xendit) — invoice, termin, dan pencatatan
-  pembayaran manual sudah berjalan; pemilihan penyedia masih pertanyaan terbuka
-  PRD #6.
-- **Tanda tangan elektronik** (Privy/Digisign) dan **integrasi kalender**.
+| Yang belum tersambung | Yang dibangun sebagai gantinya |
+|---|---|
+| Pengiriman email dan WhatsApp | Notifikasi dicatat, dan tautan konfigurasi disediakan untuk disalin manual oleh tim. |
+| Payment gateway (Midtrans/Xendit) — penyedianya masih pertanyaan terbuka PRD #6 | Transfer manual dengan konfirmasi bukti, pemisahan "dicatat" dan "diverifikasi", invoice berurutan dengan PPN, termin mengikuti milestone, dan penandaan jatuh tempo. Webhook penyedia nanti cukup memanggil pencatatan yang sama. |
+| Tanda tangan elektronik (Privy/Digisign) | Penandatanganan dicatat beserta nama, email, waktu, dan pelakunya di audit log. Kolom bukti tanda tangan sudah disiapkan. |
+| Integrasi kalender | Klien memilih slot hari kerja yang tersedia; pilihannya mengubah tahap lead dan memunculkan aktivitas di pipeline. |
 
 ---
 

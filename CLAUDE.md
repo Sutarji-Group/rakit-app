@@ -58,6 +58,10 @@ src/lib/services/             Logika bisnis sisi server (impor 'server-only')
   custom-request.ts             Antrean fitur custom, SLA, promosi ke katalog
   lead.ts                       submitConfiguration(), pipeline, override harga
   pricing-rule.ts               getActivePricingRule(), getPricingRuleById()
+  project.ts                    Konversi konfigurasi menjadi proyek, milestone, invoice
+  portal.ts                     Portal klien — setiap kueri menyaring dengan clientId
+  billing.ts                    Pencatatan pembayaran, verifikasi bukti, jatuh tempo
+  contract.ts                   Generator kontrak + lampiran SOW dari konfigurasi
 
 src/lib/analytics/            events.ts (daftar event), track.ts (klien), report.ts (agregat)
 src/lib/auth/                 Sesi, kata sandi, penjaga akses
@@ -67,6 +71,9 @@ src/components/ui/            Primitif UI — SELALU pakai ini, jangan buat baru
 src/components/layout/        SiteHeader, SiteFooter, AdminShell, Logo
 
 src/app/(marketing)/          Halaman publik dengan header + footer
+src/app/rakit/                Konfigurator, konfigurasi proyek, ringkasan, kirim
+src/app/admin/                Area internal (modul L–Q, kontrak, tagihan)
+src/app/portal/               Portal klien
 src/app/api/                  Route handler REST
 ```
 
