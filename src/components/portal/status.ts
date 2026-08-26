@@ -6,6 +6,7 @@ import type {
   MilestoneStatus,
   PaymentStatus,
   ProjectStatus,
+  RevisionAction,
   TaskStatus,
 } from '@/lib/domain/enums';
 
@@ -76,4 +77,41 @@ export const CHANGE_REQUEST_STATUS_TONE: Record<ChangeRequestStatus, BadgeVarian
   APPROVED: 'success',
   REJECTED: 'danger',
   CANCELLED: 'outline',
+};
+
+/**
+ * Label riwayat versi rakitan (G3) dalam bahasa klien.
+ *
+ * enums.ts hanya menyimpan daftar aksinya; kalimat yang dibaca pemilik usaha
+ * ditulis di sini supaya istilah internal seperti "override" tidak bocor ke
+ * halaman akun.
+ */
+export const REVISION_ACTION_LABEL: Record<RevisionAction, string> = {
+  CREATED: 'Rakitan dibuat',
+  FEATURE_ADDED: 'Fitur ditambahkan',
+  FEATURE_REMOVED: 'Fitur dihapus',
+  PRESET_APPLIED: 'Paket siap pakai diterapkan',
+  OPTIONS_CHANGED: 'Konfigurasi proyek diubah',
+  CUSTOM_ADDED: 'Permintaan fitur custom diajukan',
+  CUSTOM_REMOVED: 'Permintaan fitur custom dibatalkan',
+  ADDON_CHANGED: 'Layanan tambahan diubah',
+  SUBMITTED: 'Rakitan dikirim ke tim kami',
+  PRICE_OVERRIDE: 'Penyesuaian harga oleh tim kami',
+  ESTIMATE_UPDATED: 'Estimasi fitur custom masuk',
+  PRICE_LOCKED: 'Harga dikunci',
+};
+
+export const REVISION_ACTION_TONE: Record<RevisionAction, BadgeVariant> = {
+  CREATED: 'neutral',
+  FEATURE_ADDED: 'success',
+  FEATURE_REMOVED: 'danger',
+  PRESET_APPLIED: 'brand',
+  OPTIONS_CHANGED: 'info',
+  CUSTOM_ADDED: 'accent',
+  CUSTOM_REMOVED: 'outline',
+  ADDON_CHANGED: 'info',
+  SUBMITTED: 'brand',
+  PRICE_OVERRIDE: 'warning',
+  ESTIMATE_UPDATED: 'accent',
+  PRICE_LOCKED: 'success',
 };

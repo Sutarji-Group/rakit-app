@@ -175,12 +175,14 @@ export function SavedConfigurationList({ items }: { items: SavedConfiguration[] 
             <Button size="sm" variant="ghost" onClick={() => setSelected([])}>
               Batal
             </Button>
-            <Button asChild size="sm" disabled={!compareHref}>
-              <Link href={compareHref ?? '#'} aria-disabled={!compareHref}>
-                <GitCompareArrows className="size-4" aria-hidden="true" />
-                Bandingkan
-              </Link>
-            </Button>
+            {compareHref && (
+              <Button asChild size="sm">
+                <Link href={compareHref}>
+                  <GitCompareArrows className="size-4" aria-hidden="true" />
+                  Bandingkan
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       )}
