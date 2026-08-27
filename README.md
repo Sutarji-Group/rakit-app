@@ -205,11 +205,18 @@ petunjuk di bawah memakai Vercel sebagai contoh.
 
 ### 1. Siapkan basis data
 
-Butuh PostgreSQL terkelola yang bisa diakses dari internet — Neon, Supabase,
-Railway, atau Postgres milik sendiri. **SQLite tidak bisa dipakai**: berkas
-sistem di serverless bersifat hanya-baca dan tidak dibagi antar instance, jadi
-setiap invocation akan melihat basis data yang berbeda atau tidak ada sama
-sekali.
+Butuh PostgreSQL terkelola yang bisa diakses dari internet. **SQLite tidak bisa
+dipakai**: berkas sistem di serverless bersifat hanya-baca dan tidak dibagi antar
+instance, jadi setiap invocation akan melihat basis data yang berbeda atau tidak
+ada sama sekali.
+
+Cara termudah: buat basis data Neon lewat **Vercel → Storage → Create Database**.
+Variabel lingkungannya terisi otomatis, termasuk koneksi langsung untuk migrasi.
+Alternatifnya buat sendiri di [neon.com](https://neon.com) atau
+[supabase.com](https://supabase.com), lalu salin URL-nya ke Vercel.
+
+Basis data aplikasi ini kecil — katalog penuh berisi 132 fitur hanya beberapa
+megabita — jadi paket gratis mana pun cukup untuk waktu yang lama.
 
 ### 2. Isi variabel lingkungan
 
@@ -223,6 +230,12 @@ sekali.
 
 **Postgres tanpa pooler cukup `DATABASE_URL` saja.** Migrasi akan memakainya
 juga, dan mencatat bahwa ia melakukannya.
+
+**Neon dan Vercel Postgres tidak perlu diisi manual sama sekali.** Integrasinya
+sudah menyuntikkan koneksi langsung dengan nama sendiri, dan migrasi mengenali
+nama-nama itu — `DATABASE_URL_UNPOOLED` (Neon) dan `POSTGRES_URL_NON_POOLING`
+(Vercel Postgres). `DIRECT_URL` yang Anda isi sendiri selalu menang atas
+keduanya.
 
 Dua URL baru dibutuhkan bila basis data berada di balik connection pooler, dan
 alasannya berlawanan satu sama lain. Setiap invocation serverless membuka
