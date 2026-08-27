@@ -30,9 +30,9 @@ npm run dev
 
 Buka <http://localhost:3000>.
 
-Di `.env`, `DATABASE_URL` dan `DIRECT_URL` boleh berisi nilai yang sama saat
-pengembangan lokal — perbedaannya baru relevan di produksi serverless (lihat
-[Menggelar ke produksi](#menggelar-ke-produksi)).
+`DIRECT_URL` boleh dikosongkan; bila kosong, `DATABASE_URL` yang dipakai untuk
+migrasi. Perbedaannya baru relevan bila basis data berada di balik connection
+pooler — lihat [Menggelar ke produksi](#menggelar-ke-produksi).
 
 ### Akun contoh
 
@@ -213,20 +213,25 @@ sekali.
 
 ### 2. Isi variabel lingkungan
 
-| Variabel | Isi |
-|---|---|
-| `DATABASE_URL` | Koneksi **lewat pooler**, ditambah `?pgbouncer=true&connection_limit=1` |
-| `DIRECT_URL` | Koneksi **langsung** ke host basis data, tanpa pooler |
-| `AUTH_SECRET` | String acak minimal 32 karakter — `openssl rand -base64 32` |
-| `NEXT_PUBLIC_APP_URL` | URL publik aplikasi, mis. `https://rakit.id` |
-| `NEXT_PUBLIC_COMPANY_*` | Identitas perusahaan pada dokumen penawaran |
+| Variabel | Wajib | Isi |
+|---|---|---|
+| `DATABASE_URL` | ya | Koneksi yang dipakai aplikasi saat berjalan |
+| `DIRECT_URL` | hanya bila pakai pooler | Koneksi **langsung** ke host basis data |
+| `AUTH_SECRET` | ya | String acak minimal 32 karakter — `openssl rand -base64 32` |
+| `NEXT_PUBLIC_APP_URL` | ya | URL publik aplikasi, mis. `https://rakit.id` |
+| `NEXT_PUBLIC_COMPANY_*` | tidak | Identitas perusahaan pada dokumen penawaran |
 
-Dua URL basis data dibutuhkan karena keduanya menjawab masalah yang berlawanan.
-Setiap invocation serverless membuka koneksinya sendiri, dan Postgres punya
-batas koneksi yang jauh lebih kecil daripada jumlah invocation yang mungkin
-hidup bersamaan — karena itu aplikasi menyambung lewat pooler. Namun
-`prisma migrate` tidak bisa berjalan lewat pooler transaction-mode, sehingga
-migrasi memakai `DIRECT_URL`.
+**Postgres tanpa pooler cukup `DATABASE_URL` saja.** Migrasi akan memakainya
+juga, dan mencatat bahwa ia melakukannya.
+
+Dua URL baru dibutuhkan bila basis data berada di balik connection pooler, dan
+alasannya berlawanan satu sama lain. Setiap invocation serverless membuka
+koneksinya sendiri, sementara Postgres punya batas koneksi yang jauh lebih kecil
+daripada jumlah invocation yang bisa hidup bersamaan — karena itu aplikasi
+menyambung lewat pooler, dan `DATABASE_URL` membawa
+`?pgbouncer=true&connection_limit=1`. Sebaliknya `prisma migrate` butuh advisory
+lock yang hidup sepanjang sesi, sedangkan pooler transaction-mode memutus sesi
+di antara pernyataan — karena itu migrasi memakai `DIRECT_URL`.
 
 Contoh untuk Neon:
 
@@ -239,8 +244,7 @@ Perhatikan bedanya: host pooler mengandung `-pooler`, host langsung tidak.
 
 ### 3. Gelar
 
-`npm run build` menjalankan `prisma generate`, lalu `prisma migrate deploy`,
-baru `next build`. Migrasi karenanya ikut tergelar setiap kali deploy, dan build
+`npm run build` menjalankan `prisma generate`, lalu migrasi, baru `next build`. Migrasi karenanya ikut tergelar setiap kali deploy, dan build
 gagal lebih dulu bila basis datanya tidak terjangkau — lebih baik gagal saat
 build daripada terdeploy dalam keadaan tidak berfungsi.
 
